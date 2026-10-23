@@ -12,11 +12,19 @@ html,body{height:100%;background:var(--bg);color:var(--fg);font-family:system-ui
 #feed::-webkit-scrollbar{display:none}
 .reel{position:relative;height:100%;scroll-snap-align:start;scroll-snap-stop:always;background:#000;overflow:hidden}
 .reel video{width:100%;height:100%;object-fit:contain;background:#000}
-.side{position:absolute;right:10px;bottom:calc(60px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:18px;align-items:center}
+.side{position:absolute;right:10px;bottom:calc(84px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:18px;align-items:center}
 .btn{width:46px;height:46px;border-radius:50%;border:0;background:rgba(0,0,0,.45);color:#fff;font-size:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;backdrop-filter:blur(6px)}
 .btn.on{color:#ff5a6e}
-.bar{position:absolute;left:0;right:0;bottom:env(safe-area-inset-bottom,0px);height:3px;background:rgba(255,255,255,.2)}
-.bar i{display:block;height:100%;width:0;background:var(--acc)}
+.seek{position:absolute;left:0;right:0;bottom:env(safe-area-inset-bottom,0px);padding:0 14px 12px;touch-action:none;cursor:pointer;background:linear-gradient(transparent,rgba(0,0,0,.6));z-index:3}
+.time{display:flex;justify-content:space-between;font-size:13px;font-variant-numeric:tabular-nums;color:#fff;padding-bottom:10px;text-shadow:0 1px 3px rgba(0,0,0,.8)}
+.track{position:relative;height:4px;border-radius:2px;background:rgba(255,255,255,.3);transition:height .15s}
+.track i{display:block;height:100%;width:0;border-radius:2px;background:var(--acc)}
+.track b{position:absolute;top:50%;left:0;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;background:#fff;box-shadow:0 0 4px rgba(0,0,0,.5)}
+.seek.drag .track{height:8px}
+.seek.drag .time{font-size:18px;font-weight:600}
+.tip{position:absolute;top:50%;margin-top:-30px;padding:10px 16px;border-radius:24px;background:rgba(0,0,0,.55);font-size:16px;font-weight:600;opacity:0;transition:opacity .2s;pointer-events:none}
+.tip.show{opacity:1}
+.tip.l{left:12%}.tip.r{right:12%}
 .pp{position:absolute;inset:0;margin:auto;width:76px;height:76px;border-radius:50%;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;font-size:34px;opacity:0;transition:opacity .2s;pointer-events:none}
 .reel.paused .pp{opacity:1}
 .top{position:fixed;top:0;left:0;right:0;z-index:5;padding:calc(10px + env(safe-area-inset-top,0px)) 14px 10px;background:linear-gradient(rgba(0,0,0,.6),transparent);pointer-events:none}
@@ -95,11 +103,39 @@ var GH_BRANCH = "main";       // nama branch
     var msg=el("div","msg","Video tidak dapat dimuat.");
     v.addEventListener("error",function(){msg.style.display="block"});
     v.addEventListener("loadeddata",function(){msg.style.display="none"});
-    var bar=el("div","bar"),fill=document.createElement("i");bar.appendChild(fill);
-    v.addEventListener("timeupdate",function(){if(v.duration)fill.style.width=(v.currentTime/v.duration*100)+"%"});
+    function fmt(t){if(!isFinite(t)||t<0)t=0;var m=Math.floor(t/60),x=Math.floor(t%60);return m+":"+(x<10?"0":"")+x}
+    var seek=el("div","seek"),time=el("div","time"),cur=el("span",null,"0:00"),dur=el("span",null,"0:00");
+    var track=el("div","track"),fill=document.createElement("i"),knob=document.createElement("b");
+    time.appendChild(cur);time.appendChild(dur);track.appendChild(fill);track.appendChild(knob);seek.appendChild(time);seek.appendChild(track);
+    var dragging=false;
+    function paint(){
+      var d=v.duration||0,pct=d?v.currentTime/d*100:0;
+      fill.style.width=pct+"%";knob.style.left=pct+"%";cur.textContent=fmt(v.currentTime);dur.textContent=fmt(d);
+    }
+    v.addEventListener("timeupdate",function(){if(!dragging)paint()});
+    v.addEventListener("loadedmetadata",paint);
+    function seekTo(ev){
+      var rc=track.getBoundingClientRect(),f=Math.min(1,Math.max(0,(ev.clientX-rc.left)/rc.width));
+      if(v.duration){v.currentTime=f*v.duration;paint()}
+    }
+    seek.addEventListener("pointerdown",function(ev){dragging=true;seek.classList.add("drag");try{seek.setPointerCapture(ev.pointerId)}catch(e){}seekTo(ev);ev.stopPropagation()});
+    seek.addEventListener("pointermove",function(ev){if(dragging)seekTo(ev)});
+    function endDrag(){dragging=false;seek.classList.remove("drag")}
+    seek.addEventListener("pointerup",endDrag);seek.addEventListener("pointercancel",endDrag);
+    seek.addEventListener("click",function(ev){ev.stopPropagation()});
+
+    var tipL=el("div","tip l","−10 detik"),tipR=el("div","tip r","+10 detik"),last=0,timer=null;
+    function flash(t){t.classList.add("show");setTimeout(function(){t.classList.remove("show")},500)}
+    function toggle(){if(v.paused){v.play();r.classList.remove("paused")}else{v.pause();r.classList.add("paused")}}
     r.addEventListener("click",function(ev){
-      if(ev.target.closest(".btn"))return;
-      if(v.paused){v.play();r.classList.remove("paused")}else{v.pause();r.classList.add("paused")}
+      if(ev.target.closest(".btn,.seek"))return;
+      var now=Date.now();
+      if(now-last<300){ // ketuk dua kali: maju/mundur 10 detik
+        clearTimeout(timer);last=0;
+        var left=ev.clientX<r.getBoundingClientRect().left+r.offsetWidth/2,d=v.duration||0;
+        v.currentTime=Math.min(Math.max(0,v.currentTime+(left?-10:10)),d?d-0.1:1e9);
+        flash(left?tipL:tipR);paint();
+      }else{last=now;timer=setTimeout(toggle,300)}
     });
     var side=el("div","side");
     var like=el("button","btn"+(likes[url]?" on":""),likes[url]?"♥":"♡");
@@ -108,7 +144,7 @@ var GH_BRANCH = "main";       // nama branch
     var mute=el("button","btn mute",muted?"🔇":"🔊");mute.setAttribute("aria-label","Suara");
     mute.onclick=function(){muted=!muted;document.querySelectorAll("video").forEach(function(x){x.muted=muted});document.querySelectorAll(".mute").forEach(function(x){x.textContent=muted?"🔇":"🔊"})};
     side.appendChild(like);side.appendChild(mute);
-    r.appendChild(v);r.appendChild(msg);r.appendChild(el("div","pp","▶"));r.appendChild(side);r.appendChild(bar);
+    r.appendChild(v);r.appendChild(msg);r.appendChild(el("div","pp","▶"));r.appendChild(tipL);r.appendChild(tipR);r.appendChild(side);r.appendChild(seek);
     feed.appendChild(r);io.observe(r);
   }
 
