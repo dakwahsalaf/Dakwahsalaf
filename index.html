@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Dakwah Salaf</title>
 <meta name="theme-color" content="#000000">
+<meta name="description" content="Video dakwah full layar, geser seperti Reels.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Dakwah Salaf">
+<meta property="og:description" content="Tonton video dakwah, geser untuk video berikutnya.">
+<meta property="og:image" content="https://dakwahsalaf.github.io/Dakwahsalaf/icon-512.png">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -30,6 +35,16 @@ html,body{height:100%;background:var(--bg);color:var(--fg);font-family:system-ui
 .track b{position:absolute;top:50%;left:0;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;background:#fff;box-shadow:0 0 4px rgba(0,0,0,.5)}
 .seek.drag .track{height:8px}
 .seek.drag .time{font-size:18px;font-weight:600}
+#share{position:fixed;inset:0;z-index:20;background:rgba(0,0,0,.6);display:none;align-items:flex-end}
+#share.open{display:flex}
+.sp{width:100%;background:#1b1b1b;border-radius:20px 20px 0 0;padding:18px 16px calc(20px + env(safe-area-inset-bottom,0px))}
+.sp h3{font-size:16px;margin-bottom:4px}
+.sp small{display:block;color:var(--mut);font-size:12px;margin-bottom:16px;word-break:break-all}
+.opts{display:grid;grid-template-columns:repeat(3,1fr);gap:16px 8px}
+.opt{background:none;border:0;color:#fff;font-size:12px;display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer}
+.opt i{width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-style:normal;font-weight:700;font-size:16px;color:#fff}
+#toast{position:fixed;left:50%;bottom:calc(30px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:30;background:#fff;color:#000;padding:10px 16px;border-radius:20px;font-size:14px;font-weight:600;opacity:0;transition:opacity .2s;pointer-events:none}
+#toast.show{opacity:1}
 .tip{position:absolute;top:50%;margin-top:-30px;padding:10px 16px;border-radius:24px;background:rgba(0,0,0,.55);font-size:16px;font-weight:600;opacity:0;transition:opacity .2s;pointer-events:none}
 .tip.show{opacity:1}
 .tip.l{left:12%}.tip.r{right:12%}
@@ -47,6 +62,18 @@ html,body{height:100%;background:var(--bg);color:var(--fg);font-family:system-ui
 </head>
 <body>
 <div class="top"><h1>Dakwah Salaf</h1><button id="install">Pasang</button></div>
+<div id="share"><div class="sp">
+  <h3>Bagikan video</h3><small id="sl"></small>
+  <div class="opts">
+    <button class="opt" data-a="wa"><i style="background:#25d366">WA</i>WhatsApp</button>
+    <button class="opt" data-a="tg"><i style="background:#2aabee">TG</i>Telegram</button>
+    <button class="opt" data-a="fb"><i style="background:#1877f2">f</i>Facebook</button>
+    <button class="opt" data-a="x"><i style="background:#333">X</i>X</button>
+    <button class="opt" data-a="copy"><i style="background:#555">🔗</i>Salin tautan</button>
+    <button class="opt" data-a="more" id="more"><i style="background:#8a5cf6">⋯</i>Lainnya</button>
+  </div>
+</div></div>
+<div id="toast"></div>
 <div id="feed"><div class="empty"><h2>Memuat video…</h2></div></div>
 
 <script>
@@ -59,8 +86,10 @@ var GH_BRANCH = "main";       // nama branch
 
 (function(){
   var EXT=/\.(mp4|webm|mov|m4v|ogv)$/i, CACHE="dakwah_cache_v2", TTL=10*60*1000, LIKE="dakwah_likes_v1";
-  var feed=document.getElementById("feed"), muted=true, likes={}, pool=[], total=0, lastUrl="";
+  var feed=document.getElementById("feed"), muted=true, likes={}, pool=[], total=0, lastUrl="", want=null;
 
+  try{want=new URLSearchParams(location.search).get("v")}catch(e){}
+  function nameOf(u){try{return decodeURIComponent(u.split("/").pop())}catch(e){return u.split("/").pop()}}
   function load(k,d){try{var v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}}
   function save(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
   function el(t,c,x){var n=document.createElement(t);if(c)n.className=c;if(x!=null)n.textContent=x;return n}
@@ -90,6 +119,10 @@ var GH_BRANCH = "main";       // nama branch
   function shuffled(){
     var a=pool.slice(),i,j,t;
     for(i=a.length-1;i>0;i--){j=Math.floor(Math.random()*(i+1));t=a[i];a[i]=a[j];a[j]=t}
+    if(want){ // tautan bagikan: video yang dikirim tampil pertama
+      for(i=0;i<a.length;i++){if(nameOf(a[i])===want){t=a[i];a.splice(i,1);a.unshift(t);break}}
+      want=null;
+    }
     if(a.length>1&&a[0]===lastUrl){t=a[0];a[0]=a[a.length-1];a[a.length-1]=t}
     lastUrl=a[a.length-1];
     return a;
@@ -154,10 +187,39 @@ var GH_BRANCH = "main";       // nama branch
     like.onclick=function(){if(likes[url])delete likes[url];else likes[url]=1;save(LIKE,likes);like.textContent=likes[url]?"♥":"♡";like.classList.toggle("on",!!likes[url])};
     var mute=el("button","btn mute",muted?"🔇":"🔊");mute.setAttribute("aria-label","Suara");
     mute.onclick=function(){muted=!muted;document.querySelectorAll("video").forEach(function(x){x.muted=muted});document.querySelectorAll(".mute").forEach(function(x){x.textContent=muted?"🔇":"🔊"})};
-    side.appendChild(like);side.appendChild(mute);
+    var sh=el("button","btn");sh.setAttribute("aria-label","Bagikan");
+    sh.innerHTML='<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg>';
+    sh.onclick=function(){openShare(url)};
+    side.appendChild(like);side.appendChild(sh);side.appendChild(mute);
     r.appendChild(v);r.appendChild(msg);r.appendChild(el("div","pp","▶"));r.appendChild(tipL);r.appendChild(tipR);r.appendChild(side);r.appendChild(seek);
     feed.appendChild(r);io.observe(r);
   }
+
+  var shareEl=document.getElementById("share"),toast=document.getElementById("toast"),shareUrl="";
+  var TEXT="Tonton video dakwah ini:";
+  function say(t){toast.textContent=t;toast.classList.add("show");setTimeout(function(){toast.classList.remove("show")},1800)}
+  function openShare(u){
+    shareUrl=location.origin+location.pathname+"?v="+encodeURIComponent(nameOf(u));
+    document.getElementById("sl").textContent=shareUrl;
+    document.getElementById("more").style.display=navigator.share?"flex":"none";
+    shareEl.classList.add("open");
+  }
+  function copy(){
+    function fb(){var t=document.createElement("textarea");t.value=shareUrl;t.style.position="fixed";t.style.opacity="0";document.body.appendChild(t);t.select();try{document.execCommand("copy");say("Tautan disalin")}catch(e){say("Gagal menyalin")}document.body.removeChild(t)}
+    if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(shareUrl).then(function(){say("Tautan disalin")},fb);else fb();
+  }
+  shareEl.addEventListener("click",function(e){
+    if(e.target===shareEl){shareEl.classList.remove("open");return}
+    var b=e.target.closest(".opt");if(!b)return;
+    var a=b.dataset.a,u=encodeURIComponent(shareUrl),t=encodeURIComponent(TEXT);
+    if(a==="copy"){copy()}
+    else if(a==="more"){navigator.share({title:"Dakwah Salaf",text:TEXT,url:shareUrl}).catch(function(){})}
+    else{
+      var link={wa:"https://wa.me/?text="+t+"%20"+u,tg:"https://t.me/share/url?url="+u+"&text="+t,fb:"https://www.facebook.com/sharer/sharer.php?u="+u,x:"https://twitter.com/intent/tweet?text="+t+"&url="+u}[a];
+      window.open(link,"_blank","noopener");
+    }
+    shareEl.classList.remove("open");
+  });
 
   function addBatch(){shuffled().forEach(addReel)}
 
