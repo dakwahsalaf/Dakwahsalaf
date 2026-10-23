@@ -32,8 +32,8 @@ html,body{height:100%;background:var(--bg);color:var(--fg);font-family:system-ui
 
 <script>
 /* ===== PENGATURAN: ubah 4 baris ini ===== */
-var GH_USER   = "USERNAME";   // nama akun GitHub
-var GH_REPO   = "REPO";       // nama repository
+var GH_USER   = "dakwahsalaf";   // nama akun GitHub
+var GH_REPO   = "Dakwahsalaf";     // nama repository
 var GH_FOLDER = "videos";     // folder berisi 1.mp4, 2.mp4, 3.mp4, ...
 var GH_BRANCH = "main";       // nama branch
 /* ======================================== */
@@ -114,7 +114,7 @@ var GH_BRANCH = "main";       // nama branch
 
   function addBatch(){shuffled().forEach(addReel)}
 
-  if(GH_USER==="USERNAME"){showMsg("Video belum tersedia");return}
+  if(!GH_USER){showMsg("Video belum tersedia");return}
   fetchList().then(function(items){
     pool=items;
     if(!pool.length){showMsg("Video belum tersedia");return}
