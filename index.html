@@ -45,6 +45,10 @@ html,body{height:100%;background:var(--bg);color:var(--fg);font-family:system-ui
 .opt i{width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-style:normal;font-weight:700;font-size:16px;color:#fff}
 #toast{position:fixed;left:50%;bottom:calc(30px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:30;background:#fff;color:#000;padding:10px 16px;border-radius:20px;font-size:14px;font-weight:600;opacity:0;transition:opacity .2s;pointer-events:none}
 #toast.show{opacity:1}
+#start{position:fixed;inset:0;z-index:15;background:rgba(0,0,0,.65);display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;padding:32px;cursor:pointer}
+#start.show{display:flex}
+#start .go{width:84px;height:84px;border-radius:50%;background:var(--acc);color:#04210f;display:flex;align-items:center;justify-content:center;font-size:38px}
+#start p{font-size:15px;color:#fff}
 .tip{position:absolute;top:50%;margin-top:-30px;padding:10px 16px;border-radius:24px;background:rgba(0,0,0,.55);font-size:16px;font-weight:600;opacity:0;transition:opacity .2s;pointer-events:none}
 .tip.show{opacity:1}
 .tip.l{left:12%}.tip.r{right:12%}
@@ -74,6 +78,7 @@ html,body{height:100%;background:var(--bg);color:var(--fg);font-family:system-ui
   </div>
 </div></div>
 <div id="toast"></div>
+<div id="start"><div class="go">▶</div><p>Ketuk untuk memutar video dengan suara</p></div>
 <div id="feed"><div class="empty"><h2>Memuat video…</h2></div></div>
 
 <script>
@@ -86,7 +91,7 @@ var GH_BRANCH = "main";       // nama branch
 
 (function(){
   var EXT=/\.(mp4|webm|mov|m4v|ogv)$/i, CACHE="dakwah_cache_v2", TTL=10*60*1000, LIKE="dakwah_likes_v1";
-  var feed=document.getElementById("feed"), muted=true, likes={}, pool=[], total=0, lastUrl="", want=null;
+  var feed=document.getElementById("feed"), muted=false, likes={}, pool=[], total=0, lastUrl="", want=null;
 
   try{want=new URLSearchParams(location.search).get("v")}catch(e){}
   function nameOf(u){try{return decodeURIComponent(u.split("/").pop())}catch(e){return u.split("/").pop()}}
@@ -128,11 +133,20 @@ var GH_BRANCH = "main";       // nama branch
     return a;
   }
 
+  var cur=null,startEl=document.getElementById("start");
+  function tryPlay(v){
+    var p=v.play();
+    if(p&&p.catch)p.catch(function(err){
+      if(err&&err.name==="NotAllowedError")startEl.classList.add("show"); // peramban butuh satu ketukan agar suara boleh menyala
+    });
+  }
+  startEl.addEventListener("click",function(){startEl.classList.remove("show");if(cur){cur.muted=false;tryPlay(cur)}});
+
   var io=new IntersectionObserver(function(es){
     es.forEach(function(e){
       var r=e.target, v=r.querySelector("video");
       if(e.isIntersecting&&e.intersectionRatio>=.7){
-        v.muted=muted;var p=v.play();if(p&&p.catch)p.catch(function(){});
+        v.muted=false;cur=v;tryPlay(v);
         r.classList.remove("paused");
         if(+r.dataset.i>=total-2)addBatch(); // hampir habis → tambah acakan baru (tanpa akhir)
       }else{v.pause();if(e.intersectionRatio<.2)v.currentTime=0}
@@ -142,7 +156,7 @@ var GH_BRANCH = "main";       // nama branch
   function addReel(url){
     var r=el("section","reel"), v=document.createElement("video");
     r.dataset.i=total++;
-    v.src=url;v.loop=true;v.muted=true;v.playsInline=true;v.preload=total<=2?"auto":"metadata";
+    v.src=url;v.loop=true;v.muted=false;v.playsInline=true;v.preload=total<=2?"auto":"metadata";
     v.setAttribute("playsinline","");v.setAttribute("webkit-playsinline","");
     var msg=el("div","msg","Video tidak dapat dimuat.");
     v.addEventListener("error",function(){msg.style.display="block"});
@@ -185,19 +199,31 @@ var GH_BRANCH = "main";       // nama branch
     var like=el("button","btn"+(likes[url]?" on":""),likes[url]?"♥":"♡");
     like.setAttribute("aria-label","Suka");
     like.onclick=function(){if(likes[url])delete likes[url];else likes[url]=1;save(LIKE,likes);like.textContent=likes[url]?"♥":"♡";like.classList.toggle("on",!!likes[url])};
-    var mute=el("button","btn mute",muted?"🔇":"🔊");mute.setAttribute("aria-label","Suara");
-    mute.onclick=function(){muted=!muted;document.querySelectorAll("video").forEach(function(x){x.muted=muted});document.querySelectorAll(".mute").forEach(function(x){x.textContent=muted?"🔇":"🔊"})};
     var sh=el("button","btn");sh.setAttribute("aria-label","Bagikan");
     sh.innerHTML='<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg>';
     sh.onclick=function(){openShare(url)};
-    side.appendChild(like);side.appendChild(sh);side.appendChild(mute);
+    var dl=el("button","btn");dl.setAttribute("aria-label","Unduh");
+    dl.innerHTML='<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"/></svg>';
+    dl.onclick=function(){download(url)};
+    side.appendChild(like);side.appendChild(sh);side.appendChild(dl);
     r.appendChild(v);r.appendChild(msg);r.appendChild(el("div","pp","▶"));r.appendChild(tipL);r.appendChild(tipR);r.appendChild(side);r.appendChild(seek);
     feed.appendChild(r);io.observe(r);
   }
 
   var shareEl=document.getElementById("share"),toast=document.getElementById("toast"),shareUrl="";
   var TEXT="Tonton video dakwah ini:";
-  function say(t){toast.textContent=t;toast.classList.add("show");setTimeout(function(){toast.classList.remove("show")},1800)}
+  var toastT=null;
+  function say(t,ms){toast.textContent=t;toast.classList.add("show");clearTimeout(toastT);toastT=setTimeout(function(){toast.classList.remove("show")},ms||1800)}
+  function download(u){
+    var name="Dakwah Salaf - "+nameOf(u);
+    say("Mengunduh…",60000);
+    fetch(u).then(function(r){if(!r.ok)throw new Error(r.status);return r.blob()}).then(function(b){
+      var a=document.createElement("a"),url=URL.createObjectURL(b);
+      a.href=url;a.download=name;document.body.appendChild(a);a.click();document.body.removeChild(a);
+      setTimeout(function(){URL.revokeObjectURL(url)},10000);
+      say("Tersimpan di Unduhan: "+name,3500);
+    }).catch(function(){say("Gagal mengunduh. Coba lagi.",3000)});
+  }
   function openShare(u){
     shareUrl=location.origin+location.pathname+"?v="+encodeURIComponent(nameOf(u));
     document.getElementById("sl").textContent=shareUrl;
