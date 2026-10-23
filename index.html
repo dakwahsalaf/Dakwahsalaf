@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Dakwah Salaf</title>
+<style>
+:root{--bg:#000;--fg:#fff;--mut:rgba(255,255,255,.7);--acc:#2fbf71;color-scheme:dark;box-sizing:border-box}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden}
+#feed{height:100%;overflow-y:scroll;scroll-snap-type:y mandatory;overscroll-behavior:contain;scrollbar-width:none}
+#feed::-webkit-scrollbar{display:none}
+.reel{position:relative;height:100%;scroll-snap-align:start;scroll-snap-stop:always;background:#000;overflow:hidden}
+.reel video{width:100%;height:100%;object-fit:contain;background:#000}
+.side{position:absolute;right:10px;bottom:calc(60px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:18px;align-items:center}
+.btn{width:46px;height:46px;border-radius:50%;border:0;background:rgba(0,0,0,.45);color:#fff;font-size:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;backdrop-filter:blur(6px)}
+.btn.on{color:#ff5a6e}
+.bar{position:absolute;left:0;right:0;bottom:env(safe-area-inset-bottom,0px);height:3px;background:rgba(255,255,255,.2)}
+.bar i{display:block;height:100%;width:0;background:var(--acc)}
+.pp{position:absolute;inset:0;margin:auto;width:76px;height:76px;border-radius:50%;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;font-size:34px;opacity:0;transition:opacity .2s;pointer-events:none}
+.reel.paused .pp{opacity:1}
+.top{position:fixed;top:0;left:0;right:0;z-index:5;padding:calc(10px + env(safe-area-inset-top,0px)) 14px 10px;background:linear-gradient(rgba(0,0,0,.6),transparent);pointer-events:none}
+.top h1{font-size:18px;font-weight:700}
+.empty{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:32px;gap:12px;color:var(--mut);line-height:1.5}
+.empty h2{color:var(--fg);font-size:20px}
+.msg{position:absolute;inset:0;margin:auto;height:fit-content;width:fit-content;max-width:80%;text-align:center;background:rgba(0,0,0,.7);padding:12px 16px;border-radius:12px;font-size:14px;display:none}
+</style>
+</head>
+<body>
+<div class="top"><h1>Dakwah Salaf</h1></div>
+<div id="feed"><div class="empty"><h2>Memuat video…</h2></div></div>
+
+<script>
+/* ===== PENGATURAN: ubah 4 baris ini ===== */
+var GH_USER   = "USERNAME";   // nama akun GitHub
+var GH_REPO   = "REPO";       // nama repository
+var GH_FOLDER = "videos";     // folder berisi 1.mp4, 2.mp4, 3.mp4, ...
+var GH_BRANCH = "main";       // nama branch
+/* ======================================== */
+
+(function(){
+  var EXT=/\.(mp4|webm|mov|m4v|ogv)$/i, CACHE="dakwah_cache_v2", TTL=10*60*1000, LIKE="dakwah_likes_v1";
+  var feed=document.getElementById("feed"), muted=true, likes={}, pool=[], total=0, lastUrl="";
+
+  function load(k,d){try{var v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}}
+  function save(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+  function el(t,c,x){var n=document.createElement(t);if(c)n.className=c;if(x!=null)n.textContent=x;return n}
+  likes=load(LIKE,{});
+
+  function showMsg(h,t){feed.innerHTML="";var e=el("div","empty");e.appendChild(el("h2",null,h));if(t)e.appendChild(el("p",null,t));feed.appendChild(e)}
+
+  function fetchList(){
+    var key=GH_USER+"/"+GH_REPO+"/"+GH_FOLDER+"@"+GH_BRANCH, c=load(CACHE,null);
+    if(c&&c.key===key&&Date.now()-c.t<TTL)return Promise.resolve(c.items);
+    var path=GH_FOLDER?"/"+GH_FOLDER.split("/").map(encodeURIComponent).join("/"):"";
+    var api="https://api.github.com/repos/"+GH_USER+"/"+GH_REPO+"/contents"+path+"?ref="+encodeURIComponent(GH_BRANCH);
+    return fetch(api,{headers:{Accept:"application/vnd.github+json"}}).then(function(r){
+      if(!r.ok)throw new Error("GitHub "+r.status);
+      return r.json();
+    }).then(function(files){
+      var items=files.filter(function(f){return f.type==="file"&&EXT.test(f.name)}).map(function(f){return f.download_url});
+      save(CACHE,{key:key,t:Date.now(),items:items});
+      return items;
+    }).catch(function(e){
+      if(c&&c.key===key)return c.items;
+      throw e;
+    });
+  }
+
+  // Acak Fisher-Yates; video pertama batch baru tidak sama dengan video terakhir sebelumnya
+  function shuffled(){
+    var a=pool.slice(),i,j,t;
+    for(i=a.length-1;i>0;i--){j=Math.floor(Math.random()*(i+1));t=a[i];a[i]=a[j];a[j]=t}
+    if(a.length>1&&a[0]===lastUrl){t=a[0];a[0]=a[a.length-1];a[a.length-1]=t}
+    lastUrl=a[a.length-1];
+    return a;
+  }
+
+  var io=new IntersectionObserver(function(es){
+    es.forEach(function(e){
+      var r=e.target, v=r.querySelector("video");
+      if(e.isIntersecting&&e.intersectionRatio>=.7){
+        v.muted=muted;var p=v.play();if(p&&p.catch)p.catch(function(){});
+        r.classList.remove("paused");
+        if(+r.dataset.i>=total-2)addBatch(); // hampir habis → tambah acakan baru (tanpa akhir)
+      }else{v.pause();if(e.intersectionRatio<.2)v.currentTime=0}
+    });
+  },{root:feed,threshold:[.2,.7]});
+
+  function addReel(url){
+    var r=el("section","reel"), v=document.createElement("video");
+    r.dataset.i=total++;
+    v.src=url;v.loop=true;v.muted=true;v.playsInline=true;v.preload=total<=2?"auto":"metadata";
+    v.setAttribute("playsinline","");v.setAttribute("webkit-playsinline","");
+    var msg=el("div","msg","Video tidak dapat dimuat.");
+    v.addEventListener("error",function(){msg.style.display="block"});
+    v.addEventListener("loadeddata",function(){msg.style.display="none"});
+    var bar=el("div","bar"),fill=document.createElement("i");bar.appendChild(fill);
+    v.addEventListener("timeupdate",function(){if(v.duration)fill.style.width=(v.currentTime/v.duration*100)+"%"});
+    r.addEventListener("click",function(ev){
+      if(ev.target.closest(".btn"))return;
+      if(v.paused){v.play();r.classList.remove("paused")}else{v.pause();r.classList.add("paused")}
+    });
+    var side=el("div","side");
+    var like=el("button","btn"+(likes[url]?" on":""),likes[url]?"♥":"♡");
+    like.setAttribute("aria-label","Suka");
+    like.onclick=function(){if(likes[url])delete likes[url];else likes[url]=1;save(LIKE,likes);like.textContent=likes[url]?"♥":"♡";like.classList.toggle("on",!!likes[url])};
+    var mute=el("button","btn mute",muted?"🔇":"🔊");mute.setAttribute("aria-label","Suara");
+    mute.onclick=function(){muted=!muted;document.querySelectorAll("video").forEach(function(x){x.muted=muted});document.querySelectorAll(".mute").forEach(function(x){x.textContent=muted?"🔇":"🔊"})};
+    side.appendChild(like);side.appendChild(mute);
+    r.appendChild(v);r.appendChild(msg);r.appendChild(el("div","pp","▶"));r.appendChild(side);r.appendChild(bar);
+    feed.appendChild(r);io.observe(r);
+  }
+
+  function addBatch(){shuffled().forEach(addReel)}
+
+  if(GH_USER==="USERNAME"){showMsg("Video belum tersedia");return}
+  fetchList().then(function(items){
+    pool=items;
+    if(!pool.length){showMsg("Video belum tersedia");return}
+    feed.innerHTML="";addBatch();
+  }).catch(function(e){console.error(e);showMsg("Video belum tersedia","Coba lagi beberapa saat lagi.")});
+})();
+</script>
+</body>
+</html>
