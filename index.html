@@ -139,6 +139,16 @@ body.h .top{background:#000}
 .si+.si{border-top:1px solid rgba(255,255,255,.08)}
 .si:active,.si:hover{background:rgba(255,255,255,.1)}
 .si small{display:block;color:var(--mut);font-size:12px}
+#mapv{position:fixed;inset:0;z-index:12;background:#000;display:none;flex-direction:column}
+#mapv.open{display:flex}
+#mapv .bar{display:flex;align-items:center;gap:10px;padding:calc(8px + env(safe-area-inset-top,0px)) 8px 8px}
+#mapv .wx{flex:none;width:44px;height:44px;border:0;border-radius:50%;background:rgba(255,255,255,.12);color:#fff;font-size:22px;cursor:pointer}
+#mapv .mt{flex:1;min-width:0;font-size:15px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#mapv .wy{flex:none;border:0;border-radius:18px;padding:9px 14px;font-weight:700;font-size:13px;background:var(--acc);color:#04210f;cursor:pointer}
+#mapv iframe{flex:1;width:100%;border:0;background:#222}
+.gh1{max-width:1400px;margin:0 auto;padding:18px 12px 4px;font-size:26px;font-weight:800}
+.gh2{max-width:1400px;margin:0 auto;padding:8px 12px 2px;font-size:18px;font-weight:700;color:var(--acc)}
+.gh3{max-width:1400px;margin:0 auto;padding:4px 12px 4px;font-size:14px;font-weight:600;color:var(--mut)}
 </style>
 </head>
 <body>
@@ -160,6 +170,7 @@ body.h .top{background:#000}
 <div id="home"><div class="empty"><h2>Memuat video…</h2></div></div>
 <div id="chs"></div><div id="hist"></div><div id="oth"></div><div id="chp"></div>
 <div id="watch"><div class="bar"><button class="wx" aria-label="Tutup">←</button></div><div class="pl"></div><div class="info"><h2 class="wt"></h2><p class="wc"></p><button class="wy">Buka di YouTube</button></div></div>
+<div id="mapv"><div class="bar"><button class="wx" aria-label="Tutup">←</button><div class="mt"></div><button class="wy">Google Maps</button></div><iframe title="Peta" loading="lazy" referrerpolicy="no-referrer-when-downgrade" allowfullscreen></iframe></div>
 <nav id="tabs">
   <button data-t="home" class="on"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8v10h-6v-6H9v6H3z"/></svg>Beranda</button>
   <button data-t="short"><svg viewBox="0 0 24 24"><path fill-rule="evenodd" d="M8 3h8a3 3 0 0 1 3 3v12a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3zm2 6v6l5-3z"/></svg>Short</button>
@@ -193,7 +204,15 @@ var YT_GROUPS = [
 // Tab "Lainnya": channel masjid dan sekolah (belum ikut di Beranda/Short, hanya muncul di tab Lainnya).
 var OTH = [
   {n:"Masjid", q:"masjid", c:[], p:[
-    {n:"Masjid Hang", k:"Batam", ng:"Indonesia", a:"Mega Legenda 2, Batam Center, Batam", u:"https://maps.app.goo.gl/uzdVfANjwTZR3YUQ7"}
+    {n:"Masjid Hang", k:"Batam", kl:"Kota Batam", pv:"Kepulauan Riau", ng:"Indonesia", a:"Mega Legenda 2, Batam Center, Batam", u:"https://maps.app.goo.gl/uzdVfANjwTZR3YUQ7"},
+    {n:"Masjid Sabiilun Najaah", k:"Batam", kl:"Kota Batam", pv:"Kepulauan Riau", ng:"Indonesia", a:"Jl. Mayjen R.H. Sugandi No.1, Kompleks MKGR, Batu Aji, Batam", u:"https://maps.app.goo.gl/qqsaW4HrLjf7y9i28"},
+    {n:"Masjid Jabal Rahmah", k:"Batam", kl:"Kota Batam", pv:"Kepulauan Riau", ng:"Indonesia", a:"Komplek Bengkong Nusantara Blok D No. 1, Sadai, Bengkong, Batam", u:"https://maps.app.goo.gl/umcrPj9ZPj7bEip46"},
+    {n:"Masjid Darussakinah", k:"Batam", kl:"Kota Batam", pv:"Kepulauan Riau", ng:"Indonesia", a:"Jl. CLT, Batu Besar, Nongsa, Batam", u:"https://maps.app.goo.gl/UrtZq6fhddjdNv2M8"},
+    {n:"Al-Hijrah Markaz Sunnah Nusantara", k:"Pekanbaru", kl:"Kota Pekanbaru", pv:"Riau", ng:"Indonesia", a:"Jl. Kayu Putih, Kelurahan Bina Widya, Binawidya, Kota Pekanbaru", u:"https://maps.app.goo.gl/7nrdDAGHHkgZ7sHq8"},
+    {n:"Masjid Raudhatul Jannah", k:"Pekanbaru", kl:"Kota Pekanbaru", pv:"Riau", ng:"Indonesia", a:"Jl. Tuanku Tambusai, Labuh Baru Timur, Payung Sekaki, Kota Pekanbaru", u:"https://maps.app.goo.gl/56K8MizSZcfwwMjN9"},
+    {n:"Masjid Abu Ad Darda", k:"Pekanbaru", kl:"Kota Pekanbaru", pv:"Riau", ng:"Indonesia", a:"Panam, Jl. Merak Sakti, Simpang Baru, Binawidya, Kota Pekanbaru", u:"https://maps.app.goo.gl/AcEAzL6FnWyRJwbG8"},
+    {n:"Masjid Zaid Bin Tsabit", k:"Pekanbaru", kl:"Kota Pekanbaru", pv:"Riau", ng:"Indonesia", a:"Jl. Delima, Kel. Tobek Godang, Binawidya, Kota Pekanbaru", u:"https://maps.app.goo.gl/DfXraCBS7gjkzSrx7"},
+    {n:"Masjid Jami' Al Badr", k:"Pekanbaru", kl:"Kota Pekanbaru", pv:"Riau", ng:"Indonesia", a:"Jl. Berdikari, Umban Sari, Rumbai, Kota Pekanbaru", u:"https://maps.app.goo.gl/C9xxd284iJ8T95Wr6"}
   ]},
   {n:"Sekolah", q:"sekolah Islam", c:[], p:[]}
 ];
@@ -801,15 +820,23 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
       wrap.appendChild(so);wrap.appendChild(sg);
       return wrap;
     }
+    // Dikelompokkan: Negara (judul besar) → Provinsi → Kota. Isi di data: ng (negara), pv (provinsi), kl (label kota, mis. "Kota Batam"; jika kosong dipakai k).
     function list(a){
-      var pg=el("div","pg");
-      a.forEach(function(p){
+      var wrap=el("div"),ln=null,lp=null,lk=null,pg=null,s=a.slice();
+      function key(p){return[nz(p.ng),nz(p.pv),nz(p.kl||p.k)]}
+      s.sort(function(x,y){var u=key(x),v=key(y);for(var i=0;i<3;i++){if(u[i]<v[i])return-1;if(u[i]>v[i])return 1}return 0});
+      s.forEach(function(p){
+        var kt=p.kl||p.k||"";
+        if(p.ng&&p.ng!==ln){wrap.appendChild(el("div","gh1",p.ng));ln=p.ng;lp=null;lk=null;pg=null}
+        if(p.pv&&p.pv!==lp){wrap.appendChild(el("div","gh2",p.pv));lp=p.pv;lk=null;pg=null}
+        if(kt&&kt!==lk){wrap.appendChild(el("div","gh3",kt));lk=kt;pg=null}
+        if(!pg){pg=el("div","pg");wrap.appendChild(pg)}
         var r=el("button","cr"),ic=el("div","av","📍"),t=el("div");
         t.appendChild(el("b",null,p.n));if(p.a)t.appendChild(el("small",null,p.a));
-        r.appendChild(ic);r.appendChild(t);r.onclick=function(){window.open(p.u,"_blank","noopener")};
+        r.appendChild(ic);r.appendChild(t);r.onclick=function(){openMap(p)};
         pg.appendChild(r);
       });
-      return pg;
+      return wrap;
     }
     function show(l){
       var city=nz(l.city),cty=nz(l.country),where=[l.city,l.country].filter(Boolean).join(", ")||"lokasi Anda";
@@ -963,34 +990,54 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
   }
   function plTab(i,body){
     body.innerHTML="";body.appendChild(el("div","ab","Memuat…"));
-    cch(HV+"p"+i.id,function(){return api("playlists",{part:"snippet,contentDetails",channelId:i.id,maxResults:50}).then(function(d){
-      return(d.items||[]).map(function(p){var t=p.snippet.thumbnails||{};return{id:p.id,t:p.snippet.title,n:p.contentDetails.itemCount,th:(t.medium||t.default||{}).url||""}});
+    cch(HV+"q"+i.id,function(){return api("playlists",{part:"snippet,contentDetails",channelId:i.id,maxResults:50}).then(function(d){
+      return(d.items||[]).map(function(p){var t=p.snippet.thumbnails||{};return{id:p.id,t:p.snippet.title,n:p.contentDetails.itemCount,p:p.snippet.publishedAt||"",th:(t.medium||t.default||{}).url||""}});
     })}).then(function(a){
       if(cTab!=="p")return;body.innerHTML="";
       if(!a.length){body.appendChild(el("div","ab","Belum ada playlist."));return}
-      var g=el("div","grid");
-      a.forEach(function(p){
-        var b=el("div","vc"),th=el("div","th"),inf=el("div","in");b.setAttribute("role","button");
-        if(p.th)th.style.backgroundImage="url("+p.th+")";th.appendChild(el("span","du",p.n+" video"));
-        inf.appendChild(el("div","ti",p.t));b.appendChild(th);b.appendChild(inf);b.onclick=function(){plView(i,p,body)};g.appendChild(b);
+      var so=el("div","so"),g=el("div","grid"),sk="n";
+      function draw(){
+        g.innerHTML="";
+        a.slice().sort(function(x,y){return sk==="o"?new Date(x.p)-new Date(y.p):new Date(y.p)-new Date(x.p)}).forEach(function(p){
+          var b=el("div","vc"),th=el("div","th"),inf=el("div","in");b.setAttribute("role","button");
+          if(p.th)th.style.backgroundImage="url("+p.th+")";th.appendChild(el("span","du",p.n+" video"));
+          inf.appendChild(el("div","ti",p.t));b.appendChild(th);b.appendChild(inf);b.onclick=function(){plView(i,p,body)};g.appendChild(b);
+        });
+      }
+      [["n","Terbaru"],["o","Terlama"]].forEach(function(x){
+        var bt=el("button",x[0]===sk?"on":null,x[1]);
+        bt.onclick=function(){sk=x[0];[].forEach.call(so.children,function(y){y.classList.toggle("on",y===bt)});draw()};so.appendChild(bt);
       });
-      body.appendChild(g);
+      body.appendChild(so);body.appendChild(g);draw();
     });
   }
   function plView(i,p,body){
     body.innerHTML="";
     var so=el("div","so"),bk=el("button",null,"← Playlist"),pa=el("button","on","Putar semua"),host=el("div","pg");
-    so.appendChild(bk);so.appendChild(pa);body.appendChild(so);body.appendChild(host);host.appendChild(el("div","ab","Memuat…"));
+    var so2=el("div","so"),sk="u",items=[];
+    so.appendChild(bk);so.appendChild(pa);body.appendChild(so);body.appendChild(so2);body.appendChild(host);host.appendChild(el("div","ab","Memuat…"));
     bk.onclick=function(){plTab(i,body)};
-    cch(HV+"pl"+p.id,function(){return plIds(p.id,50).then(details)}).then(function(a){
-      host.innerHTML="";if(!a.length){host.appendChild(el("div","ab","Playlist kosong."));return}
-      pa.onclick=function(){openWatch({id:a[0].id,t:p.t,rt:a[0].t,c:i.n,ch:curCh,d:a[0].d,th:a[0].th},p.id)};
-      a.forEach(function(v){
+    function draw(){
+      host.innerHTML="";
+      var b=items.slice();
+      if(sk==="n")b.sort(function(x,y){return new Date(y.p)-new Date(x.p)});
+      else if(sk==="o")b.sort(function(x,y){return new Date(x.p)-new Date(y.p)});
+      b.forEach(function(v){
         v.ch=curCh;var r=el("div","pr"),th=el("div","th"),inf=el("div","in");r.setAttribute("role","button");
         if(v.th)th.style.backgroundImage="url("+v.th+")";th.appendChild(el("span","du",fmtL(v.d)));
         inf.appendChild(el("div","ti",v.t));inf.appendChild(el("div","me",ago(v.p)));r.appendChild(th);r.appendChild(inf);
         r.onclick=function(){openWatch(v,p.id)};host.appendChild(r);
       });
+    }
+    [["u","Urutan playlist"],["n","Terbaru"],["o","Terlama"]].forEach(function(x){
+      var bt=el("button",x[0]===sk?"on":null,x[1]);
+      bt.onclick=function(){sk=x[0];[].forEach.call(so2.children,function(y){y.classList.toggle("on",y===bt)});if(items.length)draw()};so2.appendChild(bt);
+    });
+    cch(HV+"pl"+p.id,function(){return plIds(p.id,50).then(details)}).then(function(a){
+      host.innerHTML="";if(!a.length){host.appendChild(el("div","ab","Playlist kosong."));return}
+      items=a;
+      pa.onclick=function(){openWatch({id:a[0].id,t:p.t,rt:a[0].t,c:i.n,ch:curCh,d:a[0].d,th:a[0].th},p.id)};
+      draw();
     });
   }
   function openWatch(v,list,short){
@@ -1006,7 +1053,18 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
   }
   function closeWatch(){var was=watch.classList.contains("open");watch.classList.remove("open");watch.querySelector(".pl").innerHTML="";if(was&&tab==="history")renderHist()}
   watch.querySelector(".wx").onclick=closeWatch;
-  document.addEventListener("keydown",function(e){if(e.key==="Escape")closeWatch()});
+  /* ---------- Peta di dalam app ---------- */
+  var mapv=document.getElementById("mapv");
+  function openMap(p){
+    var q=[p.n,p.a,p.kl||p.k,p.pv,p.ng].filter(Boolean).join(", ");
+    mapv.querySelector("iframe").src="https://www.google.com/maps?q="+encodeURIComponent(q)+"&hl=id&z=16&output=embed";
+    mapv.querySelector(".mt").textContent=p.n;
+    mapv.querySelector(".wy").onclick=function(){window.open(p.u,"_blank","noopener")};
+    mapv.classList.add("open");
+  }
+  function closeMap(){mapv.classList.remove("open");mapv.querySelector("iframe").src="about:blank"}
+  mapv.querySelector(".wx").onclick=closeMap;
+  document.addEventListener("keydown",function(e){if(e.key==="Escape"){closeWatch();closeMap()}});
   function setTab(t){
     tab=t;
     chp.classList.remove("open");
