@@ -132,6 +132,12 @@ body.h .top{background:#000}
 #watch .wc.lk{cursor:pointer;text-decoration:underline}
 .ci{flex:1;min-width:0;border:0;border-radius:16px;padding:8px 14px;background:rgba(255,255,255,.12);color:#fff;font:inherit;font-size:13px;outline:none}
 .ci::placeholder{color:var(--mut)}
+.sw{position:relative}
+.sg{position:absolute;left:12px;right:12px;top:calc(100% - 6px);z-index:20;max-height:260px;overflow:auto;background:#1c1c1e;border:1px solid rgba(255,255,255,.14);border-radius:14px;box-shadow:0 8px 24px rgba(0,0,0,.5);display:none}
+.si{display:flex;align-items:center;gap:10px;width:100%;border:0;background:none;color:#fff;font:inherit;font-size:14px;text-align:left;padding:10px 14px;cursor:pointer}
+.si+.si{border-top:1px solid rgba(255,255,255,.08)}
+.si:active,.si:hover{background:rgba(255,255,255,.1)}
+.si small{display:block;color:var(--mut);font-size:12px}
 </style>
 </head>
 <body>
@@ -727,21 +733,69 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
     function alive(){return box.isConnected&&tab==="oth"&&OTH[oSel]===gr}
     function status(t,r){box.innerHTML="";box.appendChild(el("div","ab",t));if(r)box.appendChild(row())}
     function row(){
-      var so=el("div","so"),inp=el("input","ci"),go=el("button","on","Cari"),me=el("button",null,"📍 Lokasi saya"),sm=el("button",null,"Semua");
-      inp.type="text";inp.placeholder="Ketik kota…";inp.setAttribute("aria-label","Nama kota");
+      var wrap=el("div","sw"),so=el("div","so"),inp=el("input","ci"),go=el("button","on","Cari"),me=el("button",null,"📍 Lokasi saya"),sm=el("button",null,"Semua"),sg=el("div","sg"),tm=0,seq=0;
+      inp.type="text";inp.placeholder="Ketik kota atau negara…";inp.setAttribute("aria-label","Nama kota atau negara");inp.setAttribute("autocomplete","off");
+      function hide(){sg.style.display="none";sg.innerHTML=""}
+      function pick(x){inp.value=x.city?x.city+(x.country?", "+x.country:""):x.country;hide();if(x.lat)save(NK,{t:Date.now(),m:1,x:x});status("Mencari…");show(x)}
+      function paint(items){
+        sg.innerHTML="";if(!items.length){hide();return}
+        items.forEach(function(x){
+          var b=el("button","si"),t=el("div");
+          t.appendChild(el("b",null,x.city||x.country));
+          var sub=x.city?[x.sub,x.country].filter(Boolean).join(", "):"Negara";
+          if(sub)t.appendChild(el("small",null,sub));
+          b.appendChild(el("span",null,x.local?"📍":(x.city?"🏙️":"🌍")));b.appendChild(t);
+          b.onclick=function(){pick(x)};sg.appendChild(b);
+        });
+        sg.style.display="block";
+      }
+      function localMatches(q){
+        var seen={},out=[];
+        all.forEach(function(p){
+          [[p.k,p.ng],[null,p.ng]].forEach(function(c){
+            var lab=c[0]||c[1];if(!lab||nz(lab).indexOf(q)<0)return;
+            var key=nz(c[0])+"|"+nz(c[1]);if(seen[key])return;seen[key]=1;
+            out.push({city:c[0]||"",country:c[1]||"",local:1});
+          });
+        });
+        return out.slice(0,4);
+      }
+      function remote(v,loc,n){
+        fetch("https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&addressdetails=1&accept-language=id&q="+encodeURIComponent(v)).then(function(r){return r.json()}).then(function(d){
+          if(n!==seq||!inp.isConnected)return;
+          var seen={},items=loc.slice();
+          loc.forEach(function(x){seen[nz(x.city)+"|"+nz(x.country)]=1});
+          (d||[]).forEach(function(x){
+            var a=x.address||{},isC=x.addresstype==="country"||x.type==="country";
+            var city=isC?"":(a.city||a.town||a.village||a.municipality||a.county||a.state||x.name||"");
+            var country=a.country||(isC?x.name:"");
+            var key=nz(city)+"|"+nz(country);if(seen[key]||(!city&&!country))return;seen[key]=1;
+            items.push({lat:+x.lat,lng:+x.lon,city:city,country:country,sub:isC?"":(a.state&&a.state!==city?a.state:"")});
+          });
+          paint(items.slice(0,8));
+        }).catch(function(){});
+      }
       function run(){
         var v=inp.value.trim();if(!v)return;
-        status("Mencari kota…");
+        hide();status("Mencari kota…");
         findCity(v).then(function(x){if(alive())show(x)}).catch(function(){if(alive())status("Kota tidak ditemukan. Coba nama lain.",1)});
       }
+      inp.addEventListener("input",function(){
+        var v=inp.value.trim(),q=nz(v);clearTimeout(tm);seq++;
+        if(q.length<2){hide();return}
+        var loc=localMatches(q);paint(loc);
+        var n=seq;tm=setTimeout(function(){remote(v,loc,n)},400);
+      });
+      inp.addEventListener("blur",function(){setTimeout(hide,150)});
       go.onclick=run;
-      inp.addEventListener("keydown",function(e){if(e.key==="Enter")run()});
+      inp.addEventListener("keydown",function(e){if(e.key==="Enter")run();else if(e.key==="Escape")hide()});
       me.onclick=function(){save(NK,null);start()};
       sm.onclick=function(){
         box.innerHTML="";box.appendChild(el("div","sec","Semua "+gr.n.toLowerCase()+" terdaftar"));box.appendChild(row());box.appendChild(list(all));
       };
       so.appendChild(inp);so.appendChild(go);so.appendChild(me);so.appendChild(sm);
-      return so;
+      wrap.appendChild(so);wrap.appendChild(sg);
+      return wrap;
     }
     function list(a){
       var pg=el("div","pg");
