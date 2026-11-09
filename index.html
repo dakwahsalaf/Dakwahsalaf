@@ -29,6 +29,8 @@ html,body{height:100%;background:var(--bg);color:var(--fg);font-family:system-ui
 .yt{position:absolute;inset:0}
 .yt iframe{width:100%;height:100%;border:0;pointer-events:none;background:#000}
 .tap{position:absolute;inset:0;z-index:1}
+.reel.fb .tap,.reel.fb .seek,.reel.fb .pp{display:none}
+.reel.fb .yt iframe{pointer-events:auto}
 .side{position:absolute;right:10px;bottom:calc(84px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:18px;align-items:center;z-index:4}
 .btn{width:46px;height:46px;border-radius:50%;border:0;background:rgba(0,0,0,.45);color:#fff;font-size:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;backdrop-filter:blur(6px)}
 .btn.on{color:#ff5a6e}
@@ -191,7 +193,7 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
   }
 
   /* ---------- YouTube IFrame API ---------- */
-  var s=document.createElement("script");s.src="https://www.youtube.com/iframe_api";document.head.appendChild(s);
+  var s=document.createElement("script");s.src="https://www.youtube.com/iframe_api";s.onerror=function(){if(cur)fallback(cur.r)};document.head.appendChild(s);
   window.onYouTubeIframeAPIReady=function(){apiReady=true;apiQ.forEach(function(f){f()});apiQ=[]};
   function whenAPI(f){if(apiReady)f();else apiQ.push(f)}
 
@@ -243,8 +245,17 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
       }else if(!unlocked){startEl.classList.add("show")}
     },4000);
   }
+  function fallback(r){
+    if(r._fb)return;
+    destroy(r);
+    r._fb=true;r.classList.add("fb","playing");
+    var id=r.dataset.id,f=document.createElement("iframe");
+    f.src="https://www.youtube.com/embed/"+id+"?autoplay=1&playsinline=1&rel=0&modestbranding=1&loop=1&playlist="+id;
+    f.allow="autoplay; encrypted-media; fullscreen";f.setAttribute("allowfullscreen","");
+    r.querySelector(".yt").appendChild(f);
+  }
   function destroy(r){
-    clearTimeout(r._wd);
+    clearTimeout(r._wd);clearTimeout(r._wd0);r._fb=false;r.classList.remove("fb");
     if(r._p){try{r._p.destroy()}catch(e){}r._p=null}
     var h=r.querySelector(".yt");if(h)h.innerHTML="";
     r.classList.remove("playing","paused");r._userPaused=false;
@@ -255,6 +266,8 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
     if(cur)destroy(cur.r);
     cur={r:r};
     whenAPI(function(){if(cur&&cur.r===r)build(r)});
+    clearTimeout(r._wd0);
+    r._wd0=setTimeout(function(){if(cur&&cur.r===r&&!r._p&&!r._fb)fallback(r)},5000);
     if(+r.dataset.i>=total-2)addBatch(); // hampir habis → tambah acakan baru (tanpa akhir)
   }
 
