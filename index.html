@@ -691,8 +691,32 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
       });
     });
   }
+  // Video terlama: daftar unggahan YouTube urut dari terbaru, jadi halaman terakhirnya berisi video paling awal.
+  function plLast(pl,onProg){
+    var prev=[],last=[],cnt=0;
+    function page(tok){
+      var q={part:"contentDetails",maxResults:50,playlistId:pl};if(tok)q.pageToken=tok;
+      return api("playlistItems",q).then(function(d){
+        var ids=(d.items||[]).map(function(x){return x.contentDetails.videoId});
+        cnt+=ids.length;if(ids.length){prev=last;last=ids}
+        if(onProg)onProg(cnt);
+        return d.nextPageToken&&cnt<20000?page(d.nextPageToken):prev.concat(last).slice(-50).reverse();
+      });
+    }
+    return page("");
+  }
+  function chOldest(i,k,onProg){
+    var key=HV+"o"+k+i.id,c=load(key,null);
+    if(c&&Date.now()-c.t<604800000)return Promise.resolve(c.x); // disimpan 7 hari
+    var pre={v:"UULF",s:"UUSH",l:"UULV"}[k],u=i.id.slice(2);
+    return plLast(pre+u,onProg).catch(function(){return[]}).then(function(ids){return ids.length||k==="s"?ids:plLast("UU"+u,onProg)}).then(details).then(function(a){
+      a=a.filter(function(v){return k==="l"?(v.lb!=="none"||v.rec):k==="s"?v.d<=180:v.d>180});
+      a.sort(function(x,y){return new Date(x.p)-new Date(y.p)});
+      if(a.length)save(key,{t:Date.now(),x:a});return a;
+    }).catch(function(){return c?c.x:[]});
+  }
   function openChannel(ch){
-    closeWatch();curCh=ch;cTab="v";chp.innerHTML="";chp.classList.add("open");chp.scrollTop=0;
+    closeWatch();curCh=ch;cTab="v";cSort="n";chp.innerHTML="";chp.classList.add("open");chp.scrollTop=0;
     chInfo(ch).then(function(i){CI[ch]=i;drawCh(i)}).catch(function(){
       var e=el("div","empty");e.appendChild(el("h2",null,"Channel tidak bisa dimuat"));e.appendChild(el("p",null,"Periksa koneksi lalu coba lagi."));chp.appendChild(e);
       var x=el("button","sub","Kembali");x.onclick=function(){chp.classList.remove("open")};chp.appendChild(x);
@@ -722,9 +746,21 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
       if(tk!==cTab)return;body.innerHTML="";
       if(!a.length){body.appendChild(el("div","ab",tk==="l"?"Belum ada live.":"Belum ada video."));return}
       var so=el("div","so"),host=el("div",tk==="s"?"gs":"grid");
-      function draw(){host.innerHTML="";var b=a.slice();if(cSort==="p")b.sort(function(x,y){return y.vw-x.vw});
-        b.forEach(function(v){v.ch=curCh;var c=card(v,0);c.onclick=function(){openWatch(v,null,tk==="s")};host.appendChild(c)})}
-      [["n","Terbaru"],["p","Terpopuler"]].forEach(function(s){
+      function put(b){host.innerHTML="";b.forEach(function(v){v.ch=curCh;var c=card(v,0);c.onclick=function(){openWatch(v,null,tk==="s")};host.appendChild(c)})}
+      function draw(){
+        var sk=cSort;
+        if(sk==="o"){
+          host.innerHTML="";var m=el("div","ab","Memuat video terlama…");m.style.gridColumn="1/-1";host.appendChild(m);
+          chOldest(i,tk,function(n){if(m.isConnected)m.textContent="Memuat video terlama… ("+n+" video diperiksa)"}).then(function(o){
+            if(cSort!==sk||tk!==cTab)return;
+            if(!o.length){m.textContent="Belum ada video.";return}
+            put(o);
+          });
+          return;
+        }
+        var b=a.slice();if(sk==="p")b.sort(function(x,y){return y.vw-x.vw});put(b);
+      }
+      [["n","Terbaru"],["p","Terpopuler"],["o","Terlama"]].forEach(function(s){
         var b=el("button",s[0]===cSort?"on":null,s[1]);
         b.onclick=function(){cSort=s[0];[].forEach.call(so.children,function(y){y.classList.toggle("on",y===b)});draw()};so.appendChild(b);
       });
