@@ -127,8 +127,11 @@ body.h .top{background:#000}
 .pr .du{position:absolute;right:6px;bottom:6px;background:rgba(0,0,0,.8);padding:2px 5px;border-radius:4px;font-size:12px;font-weight:600}
 .pr .ti{font-size:14px;font-weight:600;line-height:1.35}
 .ab{padding:14px 16px;white-space:pre-wrap;line-height:1.5;font-size:14px;color:var(--mut)}
+#oth{position:fixed;left:0;right:0;top:0;bottom:calc(56px + env(safe-area-inset-bottom,0px));overflow-y:auto;background:#000;display:none;padding:calc(52px + env(safe-area-inset-top,0px)) 0 16px}
 #watch .pl.v{width:min(100%,calc((100dvh - 130px) * .5625));aspect-ratio:9/16}
 #watch .wc.lk{cursor:pointer;text-decoration:underline}
+.ci{flex:1;min-width:0;border:0;border-radius:16px;padding:8px 14px;background:rgba(255,255,255,.12);color:#fff;font:inherit;font-size:13px;outline:none}
+.ci::placeholder{color:var(--mut)}
 </style>
 </head>
 <body>
@@ -148,13 +151,14 @@ body.h .top{background:#000}
 <div id="start"><div class="go">▶</div><p>Ketuk untuk memutar video dengan suara</p></div>
 <div id="feed"><div class="empty"><h2>Memuat video…</h2></div></div>
 <div id="home"><div class="empty"><h2>Memuat video…</h2></div></div>
-<div id="chs"></div><div id="hist"></div><div id="chp"></div>
+<div id="chs"></div><div id="hist"></div><div id="oth"></div><div id="chp"></div>
 <div id="watch"><div class="bar"><button class="wx" aria-label="Tutup">←</button></div><div class="pl"></div><div class="info"><h2 class="wt"></h2><p class="wc"></p><button class="wy">Buka di YouTube</button></div></div>
 <nav id="tabs">
   <button data-t="home" class="on"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8v10h-6v-6H9v6H3z"/></svg>Beranda</button>
   <button data-t="short"><svg viewBox="0 0 24 24"><path fill-rule="evenodd" d="M8 3h8a3 3 0 0 1 3 3v12a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3zm2 6v6l5-3z"/></svg>Short</button>
   <button data-t="channels"><svg viewBox="0 0 24 24"><path d="M12 12a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9zm0 2c-4 0-8 2-8 5v2h16v-2c0-3-4-5-8-5z"/></svg>Channel</button>
   <button data-t="history"><svg viewBox="0 0 24 24"><path d="M13 3a9 9 0 0 0-9 9H1l3.9 3.9L9 12H6a7 7 0 1 1 2.05 4.95l-1.42 1.42A9 9 0 1 0 13 3zm-1 5v5l4.3 2.5.7-1.2-3.5-2V8z"/></svg>Riwayat</button>
+  <button data-t="oth"><svg viewBox="0 0 24 24"><path d="M5 10.5A1.5 1.5 0 1 0 5 13.5 1.5 1.5 0 0 0 5 10.5zm7 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm7 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z"/></svg>Lainnya</button>
 </nav>
 
 <script>
@@ -163,12 +167,31 @@ body.h .top{background:#000}
 //   "https://www.youtube.com/@namachannel"
 //   "https://www.youtube.com/channel/UCxxxxxxxxxxxxxxxxxxxxxx"
 //   atau cukup "@namachannel"
-var YT_CHANNELS = [
-  "https://www.youtube.com/@firandaandirjaofficial",
-  "https://www.youtube.com/@rodjatv",
-  "https://www.youtube.com/@syafiqrizabasalamahofficial",
-  "https://www.youtube.com/@dr.muamarmaruf_lc_ma"
+// Channel dikelompokkan per negara. Tambahkan channel baru ke kelompok yang sesuai.
+var YT_GROUPS = [
+  {n:"Indonesia", c:[
+    "https://www.youtube.com/@firandaandirjaofficial",
+    "https://www.youtube.com/@rodjatv",
+    "https://www.youtube.com/@syafiqrizabasalamahofficial",
+    "https://www.youtube.com/@dr.muamarmaruf_lc_ma",
+    "https://www.youtube.com/@ustadzabdullahzaen",
+    "https://www.youtube.com/@ashiiltv",
+    "https://www.youtube.com/@shahihfiqih",
+    "https://www.youtube.com/@erjetv"
+  ]},
+  {n:"Arab Saudi", c:[
+    "https://www.youtube.com/@fawaidalqasim"
+  ]}
 ];
+// Tab "Lainnya": channel masjid dan sekolah (belum ikut di Beranda/Short, hanya muncul di tab Lainnya).
+var OTH = [
+  {n:"Masjid", q:"masjid", c:[], p:[
+    {n:"Masjid Hang", k:"Batam", ng:"Indonesia", a:"Mega Legenda 2, Batam Center, Batam", u:"https://maps.app.goo.gl/uzdVfANjwTZR3YUQ7"}
+  ]},
+  {n:"Sekolah", q:"sekolah Islam", c:[], p:[]}
+];
+var YT_CHANNELS = [];
+YT_GROUPS.forEach(function(g){YT_CHANNELS=YT_CHANNELS.concat(g.c)});
 
 // Kunci YouTube Data API v3 (gratis, dari console.cloud.google.com).
 // Batasi kunci ini hanya untuk domain situs Anda (HTTP referrer) dan hanya YouTube Data API v3.
@@ -660,14 +683,127 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
     }).catch(function(){});
   }
   function renderChs(){
-    chs.innerHTML="";var g=el("div","cgrid");
-    YT_CHANNELS.forEach(function(c){
+    chs.innerHTML="";
+    YT_GROUPS.forEach(function(gr){
+      if(!gr.c.length)return;
+      chs.appendChild(el("div","sec",gr.n));
+      var g=el("div","cgrid");
+      gr.c.forEach(function(c){
+        var i=CI[c],nm=i&&i.n?i.n:plain(c),b=el("button","cc");
+        b.appendChild(avatar(i,nm));b.appendChild(el("b",null,nm));
+        if(i){var sm=(i.h?plain(i.h)+" · ":"")+(i.s?nf(i.s)+" subscriber":nf(i.v)+" video");b.appendChild(el("small",null,sm))}
+        b.onclick=function(){openChannel(c)};g.appendChild(b);
+      });
+      chs.appendChild(g);
+    });
+  }
+  /* ---------- Pencarian otomatis terdekat (sesuai lokasi pengguna, seluruh dunia) ---------- */
+  // Lokasi dari GPS/jaringan perangkat (perlu izin); nama kota/negara dari Nominatim (OpenStreetMap).
+  var NK="dakwah_loc_v1";
+  function revGeo(l){
+    return fetch("https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=10&accept-language=id&lat="+l.lat+"&lon="+l.lng).then(function(r){return r.json()}).then(function(d){
+      var a=d.address||{};l.city=a.city||a.town||a.municipality||a.county||a.state||"";l.country=a.country||"";return l;
+    }).catch(function(){return l});
+  }
+  function getLoc(){
+    var c=load(NK,null);
+    if(c&&Date.now()-c.t<(c.m?2592000000:3600000))return Promise.resolve(c.x);
+    return new Promise(function(ok,no){
+      if(!navigator.geolocation)return no(new Error("geo"));
+      navigator.geolocation.getCurrentPosition(function(p){ok({lat:p.coords.latitude,lng:p.coords.longitude})},no,{timeout:10000,maximumAge:600000});
+    }).then(revGeo).then(function(l){save(NK,{t:Date.now(),x:l});return l});
+  }
+  function findCity(q){
+    return fetch("https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&addressdetails=1&accept-language=id&q="+encodeURIComponent(q)).then(function(r){return r.json()}).then(function(d){
+      var x=d&&d[0];if(!x)throw new Error("nf");
+      var a=x.address||{},l={lat:+x.lat,lng:+x.lon,city:a.city||a.town||a.municipality||a.county||a.state||q,country:a.country||""};
+      save(NK,{t:Date.now(),m:1,x:l});return l;
+    });
+  }
+  function nz(s){return String(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").trim()}
+  // Hanya menampilkan alamat yang sudah terdaftar di app (OTH[].p, isi k = kota, ng = negara), disaring sesuai lokasi pengguna.
+  function autoNear(gr,o){
+    var box=el("div"),all=gr.p||[];o.appendChild(box);
+    function alive(){return box.isConnected&&tab==="oth"&&OTH[oSel]===gr}
+    function status(t,r){box.innerHTML="";box.appendChild(el("div","ab",t));if(r)box.appendChild(row())}
+    function row(){
+      var so=el("div","so"),inp=el("input","ci"),go=el("button","on","Cari"),me=el("button",null,"📍 Lokasi saya"),sm=el("button",null,"Semua");
+      inp.type="text";inp.placeholder="Ketik kota…";inp.setAttribute("aria-label","Nama kota");
+      function run(){
+        var v=inp.value.trim();if(!v)return;
+        status("Mencari kota…");
+        findCity(v).then(function(x){if(alive())show(x)}).catch(function(){if(alive())status("Kota tidak ditemukan. Coba nama lain.",1)});
+      }
+      go.onclick=run;
+      inp.addEventListener("keydown",function(e){if(e.key==="Enter")run()});
+      me.onclick=function(){save(NK,null);start()};
+      sm.onclick=function(){
+        box.innerHTML="";box.appendChild(el("div","sec","Semua "+gr.n.toLowerCase()+" terdaftar"));box.appendChild(row());box.appendChild(list(all));
+      };
+      so.appendChild(inp);so.appendChild(go);so.appendChild(me);so.appendChild(sm);
+      return so;
+    }
+    function list(a){
+      var pg=el("div","pg");
+      a.forEach(function(p){
+        var r=el("button","cr"),ic=el("div","av","📍"),t=el("div");
+        t.appendChild(el("b",null,p.n));if(p.a)t.appendChild(el("small",null,p.a));
+        r.appendChild(ic);r.appendChild(t);r.onclick=function(){window.open(p.u,"_blank","noopener")};
+        pg.appendChild(r);
+      });
+      return pg;
+    }
+    function show(l){
+      var city=nz(l.city),cty=nz(l.country),where=[l.city,l.country].filter(Boolean).join(", ")||"lokasi Anda";
+      var inCity=all.filter(function(p){var k=nz(p.k);return k&&city&&(city.indexOf(k)>-1||k.indexOf(city)>-1)});
+      var inCty=all.filter(function(p){var n=nz(p.ng);return n&&n===cty});
+      box.innerHTML="";
+      if(inCity.length){
+        box.appendChild(el("div","sec",gr.n+" di "+where));box.appendChild(row());box.appendChild(list(inCity));
+      }else if(inCty.length){
+        box.appendChild(el("div","sec",gr.n+" di "+(l.country||where)));box.appendChild(row());
+        box.appendChild(el("div","ab","Belum ada yang terdaftar di "+(l.city||"kota Anda")+". Berikut yang ada di negara yang sama."));
+        box.appendChild(list(inCty));
+      }else{
+        box.appendChild(el("div","sec",gr.n+" di "+where));box.appendChild(row());
+        box.appendChild(el("div","ab","Belum ada "+gr.n.toLowerCase()+" yang terdaftar di "+where+"."));
+      }
+    }
+    function start(){
+      status("Mendeteksi lokasi Anda…");
+      getLoc().then(function(l){if(alive())show(l)}).catch(function(){if(alive())status("Lokasi tidak bisa diakses (izin ditolak atau tidak tersedia). Ketik nama kota Anda:",1)});
+    }
+    start();
+  }
+  var oSel=-1;
+  function renderOth(){
+    var o=document.getElementById("oth");o.innerHTML="";
+    o.scrollTop=0;
+    if(oSel<0){
+      var bl=el("div","cgrid");
+      OTH.forEach(function(g,k){
+        var b=el("button","cc"),ic=el("div","av",g.n.charAt(0));ic.style.cursor="pointer";
+        b.appendChild(ic);b.appendChild(el("b",null,g.n));if(g.c.length)b.appendChild(el("small",null,g.c.length+" channel"));
+        b.onclick=function(){oSel=k;renderOth()};bl.appendChild(b);
+      });
+      o.appendChild(bl);return;
+    }
+    var so=el("div","so"),bk=el("button",null,"← Lainnya");
+    bk.onclick=function(){oSel=-1;renderOth()};so.appendChild(bk);o.appendChild(so);
+    var gr=OTH[oSel];
+    o.appendChild(el("div","sec",gr.n));
+    var pl=gr.p||[];
+    if(pl.length)autoNear(gr,o);
+    if(!gr.c.length){if(!pl.length)o.appendChild(el("div","ab","Belum ada "+gr.n.toLowerCase()+"."));return}
+    var grid=el("div","cgrid");
+    gr.c.forEach(function(c){
       var i=CI[c],nm=i&&i.n?i.n:plain(c),b=el("button","cc");
       b.appendChild(avatar(i,nm));b.appendChild(el("b",null,nm));
-      if(i){var sm=(i.h?plain(i.h)+" · ":"")+(i.s?nf(i.s)+" subscriber":nf(i.v)+" video");b.appendChild(el("small",null,sm))}
-      b.onclick=function(){openChannel(c)};g.appendChild(b);
+      if(i){b.appendChild(el("small",null,(i.h?plain(i.h)+" · ":"")+(i.s?nf(i.s)+" subscriber":nf(i.v)+" video")))}
+      else if(YT_API_KEY)chInfo(c).then(function(x){CI[c]=x;if(tab==="oth"&&OTH[oSel]===gr)renderOth()}).catch(function(){});
+      b.onclick=function(){openChannel(c)};grid.appendChild(b);
     });
-    chs.appendChild(g);
+    o.appendChild(grid);
   }
   function loadHome(){
     if(!YT_API_KEY||!YT_CHANNELS.length){homeMsg("Channel belum diatur","Isi YT_CHANNELS dan YT_API_KEY di bagian PENGATURAN pada file ini.");return}
@@ -820,6 +956,7 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
     home.style.display=t==="home"?"block":"none";
     chs.style.display=t==="channels"?"block":"none";
     hist.style.display=t==="history"?"block":"none";if(t==="history")renderHist();
+    document.getElementById("oth").style.display=t==="oth"?"block":"none";if(t==="oth"){oSel=-1;renderOth()}
     feed.style.display=t==="short"?"block":"none";
     [].forEach.call(tabsEl.children,function(b){b.classList.toggle("on",b.dataset.t===t)});
     startEl.classList.remove("show");
