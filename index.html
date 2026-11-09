@@ -87,25 +87,29 @@ html,body{height:100%;background:var(--bg);color:var(--fg);font-family:system-ui
 
 <script>
 /* ===== PENGATURAN ===== */
-// Link channel YouTube. Boleh berupa:
+// Daftar channel YouTube (video short dari semua channel digabung dan diacak). Boleh berupa:
 //   "https://www.youtube.com/@namachannel"
 //   "https://www.youtube.com/channel/UCxxxxxxxxxxxxxxxxxxxxxx"
 //   atau cukup "@namachannel"
-var YT_CHANNEL = "https://www.youtube.com/@firandaandirjaofficial";
+var YT_CHANNELS = [
+  "https://www.youtube.com/@firandaandirjaofficial",
+  "https://www.youtube.com/@rodjatv",
+  "https://www.youtube.com/@syafiqrizabasalamahofficial"
+];
 
 // Kunci YouTube Data API v3 (gratis, dari console.cloud.google.com).
 // Batasi kunci ini hanya untuk domain situs Anda (HTTP referrer) dan hanya YouTube Data API v3.
 var YT_API_KEY = "AIzaSyC0c-m00EzB3UTVzifTbnLOHdX_dfcfkCE";
 
-// Opsional: daftar ID video manual (tanpa perlu API key). Contoh: ["dQw4w9WgXcQ","abc123XYZ_-"]
-// Jika diisi, daftar ini dipakai dan channel di atas diabaikan.
-var MANUAL_IDS = [];
+// Video tambahan satu per satu (ID video, tanpa perlu API key). Ditambahkan ke video dari channel di atas.
+// Contoh: "https://youtube.com/shorts/yk5HrF7n9Xs" -> ID-nya "yk5HrF7n9Xs"
+var EXTRA_IDS = ["yk5HrF7n9Xs"];
 
 var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
 /* ======================= */
 
 (function(){
-  var CACHE="dakwah_yt_cache_v1", TTL=30*60*1000, LIKE="dakwah_likes_v2";
+  var CACHE="dakwah_yt_cache_v2", TTL=30*60*1000, LIKE="dakwah_likes_v2";
   var feed=document.getElementById("feed"), muted=false, unlocked=false, likes={}, pool=[], total=0, lastId="", want=null, cur=null, live=[], AHEAD=2, BEHIND=1;
   var startEl=document.getElementById("start");
 
@@ -124,8 +128,8 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
       return r.json();
     });
   }
-  function channelId(){
-    var s=(YT_CHANNEL||"").trim(),m;
+  function channelId(ch){
+    var s=(ch||"").trim(),m;
     if((m=s.match(/(UC[\w-]{22})/)))return Promise.resolve(m[1]);
     if((m=s.match(/@([\w.\-]+)/))){
       return api("channels",{part:"id",forHandle:"@"+m[1]}).then(function(d){
@@ -158,22 +162,31 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
     })(ids.slice(i,i+50));
     return Promise.all(jobs).then(function(){return out});
   }
-  function fetchList(){
-    if(MANUAL_IDS.length)return Promise.resolve(MANUAL_IDS.slice());
-    var key=YT_CHANNEL,c=load(CACHE,null);
+  function fetchChannel(ch){
+    var key=ch,ck=CACHE+":"+ch,c=load(ck,null);
     if(c&&c.key===key&&Date.now()-c.t<TTL)return Promise.resolve(c.items);
-    return channelId().then(function(id){
+    return channelId(ch).then(function(id){
       // UUSH + sisa ID channel = daftar khusus YouTube Shorts
       return playlistIds("UUSH"+id.slice(2)).catch(function(){return []}).then(function(ids){
         if(ids.length)return ids;
         return playlistIds("UU"+id.slice(2)).then(onlyShort);
       });
     }).then(function(items){
-      save(CACHE,{key:key,t:Date.now(),items:items});
+      save(ck,{key:key,t:Date.now(),items:items});
       return items;
     }).catch(function(e){
+      console.error(ch,e);
       if(c&&c.key===key&&c.items.length)return c.items;
-      throw e;
+      return [];
+    });
+  }
+  function fetchList(){
+    var jobs=(YT_API_KEY?YT_CHANNELS:[]).map(fetchChannel);
+    return Promise.all(jobs).then(function(lists){
+      var all=EXTRA_IDS.slice();
+      lists.forEach(function(l){all=all.concat(l)});
+      if(!all.length)throw new Error("Tidak ada video");
+      return all;
     });
   }
 
@@ -467,8 +480,8 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
 
   function addBatch(){shuffled().forEach(addReel)}
 
-  if(!MANUAL_IDS.length&&(!YT_CHANNEL||!YT_API_KEY)){
-    showMsg("Channel belum diatur","Isi YT_CHANNEL dan YT_API_KEY di bagian PENGATURAN pada file ini.");
+  if(!EXTRA_IDS.length&&(!YT_CHANNELS.length||!YT_API_KEY)){
+    showMsg("Channel belum diatur","Isi YT_CHANNELS dan YT_API_KEY di bagian PENGATURAN pada file ini.");
     return;
   }
   fetchList().then(function(items){
