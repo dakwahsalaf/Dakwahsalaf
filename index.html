@@ -107,7 +107,7 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
 (function(){
   var CACHE="dakwah_yt_cache_v1", TTL=30*60*1000, LIKE="dakwah_likes_v2";
   var feed=document.getElementById("feed"), muted=false, unlocked=false, likes={}, pool=[], total=0, lastId="", want=null, cur=null, live=[], AHEAD=2, BEHIND=1;
-  var startEl=document.getElementById("start"), apiReady=false, apiQ=[];
+  var startEl=document.getElementById("start");
 
   try{want=new URLSearchParams(location.search).get("v")}catch(e){}
   function load(k,d){try{var v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}}
@@ -192,108 +192,128 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
     return a;
   }
 
-  /* ---------- YouTube IFrame API ---------- */
-  var s=document.createElement("script");s.src="https://www.youtube.com/iframe_api";s.onerror=function(){if(cur)fallback(cur.r)};document.head.appendChild(s);
-  window.onYouTubeIframeAPIReady=function(){apiReady=true;apiQ.forEach(function(f){f()});apiQ=[]};
-  function whenAPI(f){if(apiReady)f();else apiQ.push(f)}
+  /* ---------- Pemutar: iframe YouTube + postMessage (tanpa skrip iframe_api) ---------- */
+  var ORIGIN="https://www.youtube-nocookie.com";
 
   function setSound(){
     document.querySelectorAll(".snd").forEach(function(b){b.textContent=muted?"🔇":"🔊"});
   }
-  function applySound(p){try{if(muted)p.mute();else{p.unMute();p.setVolume(100)}}catch(e){}}
+  function cmd(r,func,args){
+    if(!r._f||!r._f.contentWindow)return;
+    try{r._f.contentWindow.postMessage(JSON.stringify({event:"command",func:func,args:args||[]}),ORIGIN)}catch(e){}
+  }
+  function applySound(r){if(muted)cmd(r,"mute");else{cmd(r,"unMute");cmd(r,"setVolume",[100])}}
 
-  function build(r){
-    if(r._p)return;
-    var id=r.dataset.id,host=r.querySelector(".yt"),d=document.createElement("div");
-    host.innerHTML="";host.appendChild(d);
-    var isCur=!!(cur&&cur.r===r);
-    var vars={autoplay:isCur?1:0,controls:0,playsinline:1,rel:0,modestbranding:1,fs:0,disablekb:1,iv_load_policy:3,enablejsapi:1};
-    if(/^https?:$/.test(location.protocol))vars.origin=location.origin;
-    r._ready=false;live.push(r);
-    r._p=new YT.Player(d,{host:"https://www.youtube-nocookie.com",videoId:id,playerVars:vars,events:{
-      onReady:function(e){
-        var p=e.target;r._ready=true;applySound(p);
-        // pemutar sudah disiapkan lebih dulu; jika reel ini sudah aktif, langsung putar
-        if(cur&&cur.r===r&&!r._userPaused){p.playVideo();verify(r)}
-      },
-      onStateChange:function(e){
-        var isNow=!!(cur&&cur.r===r);
-        if(e.data===1){
-          if(!isNow){try{e.target.pauseVideo()}catch(x){}return}
-          r._played=true;
-          r.classList.add("playing");r.classList.remove("paused");startEl.classList.remove("show");r.querySelector(".msg").style.display="none";
-        }
-        else if(e.data===2){if(isNow)r.classList.add("paused")}
-        else if(e.data===0){if(isNow){try{e.target.seekTo(0,true);e.target.playVideo()}catch(x){}}}
-      },
-      onError:function(){
-        if(!(cur&&cur.r===r))return;
+  function build(r,auto){
+    if(r._f)return;
+    var id=r.dataset.id,host=r.querySelector(".yt"),f=document.createElement("iframe");
+    var q="enablejsapi=1&controls=0&playsinline=1&rel=0&modestbranding=1&fs=0&disablekb=1&iv_load_policy=3&loop=1&playlist="+id+"&autoplay="+(auto?1:0);
+    if(/^https?:$/.test(location.protocol))q+="&origin="+encodeURIComponent(location.origin);
+    f.src=ORIGIN+"/embed/"+id+"?"+q;
+    f.allow="autoplay; encrypted-media";
+    r._ready=false;r._played=false;r._st=-1;r._t=0;r._tt=0;r._d=0;r._hs=0;
+    f.addEventListener("load",function(){listen(r,f)});
+    host.innerHTML="";host.appendChild(f);
+    r._f=f;live.push(r);
+  }
+  // jabat tangan dengan pemutar YouTube: kirim "listening" sampai pemutar membalas
+  function listen(r,f){
+    clearInterval(r._li);var n=0;
+    r._li=setInterval(function(){
+      if(r._f!==f||r._hs||n++>60){clearInterval(r._li);return}
+      try{f.contentWindow.postMessage(JSON.stringify({event:"listening",id:+r.dataset.i,channel:"widget"}),ORIGIN)}catch(e){}
+    },250);
+  }
+  function setState(r,st){
+    r._st=st;
+    var isNow=!!(cur&&cur.r===r);
+    if(st===1){
+      if(!isNow){cmd(r,"pauseVideo");return}
+      r._played=true;
+      r.classList.add("playing");r.classList.remove("paused");startEl.classList.remove("show");r.querySelector(".msg").style.display="none";
+    }else if(st===2){
+      if(isNow)r.classList.add("paused");
+    }else if(st===0){
+      if(isNow){cmd(r,"seekTo",[0,true]);cmd(r,"playVideo")}
+    }
+  }
+  window.addEventListener("message",function(e){
+    if(e.origin!==ORIGIN)return;
+    var r=null,i;
+    for(i=0;i<live.length;i++){if(live[i]._f&&live[i]._f.contentWindow===e.source){r=live[i];break}}
+    if(!r)return;
+    var d=e.data;
+    if(typeof d==="string"){try{d=JSON.parse(d)}catch(x){return}}
+    if(!d||!d.event)return;
+    r._hs=1;
+    var info=d.info;
+    if((d.event==="onReady"||d.event==="initialDelivery")&&!r._ready){
+      r._ready=true;clearInterval(r._li);applySound(r);
+      if(cur&&cur.r===r&&!r._userPaused&&!r._fb){cmd(r,"playVideo");verify(r)}
+    }
+    if(d.event==="onError"){
+      if(cur&&cur.r===r){
         var m=r.querySelector(".msg");m.textContent="Video tidak dapat diputar.";m.style.display="block";
         setTimeout(function(){if(cur&&cur.r===r&&r.nextElementSibling)r.nextElementSibling.scrollIntoView({behavior:"smooth"})},1500);
       }
-    }});
-  }
+      return;
+    }
+    if(info&&typeof info==="object"){
+      if(typeof info.duration==="number"&&info.duration>0)r._d=info.duration;
+      if(typeof info.currentTime==="number"){r._t=info.currentTime;r._tt=Date.now()}
+      if(typeof info.playerState==="number")setState(r,info.playerState);
+    }else if(d.event==="onStateChange"&&typeof info==="number")setState(r,info);
+  });
+
   // pastikan video benar-benar jalan; jika autoplay bersuara diblokir, minta ketukan sekali
   function verify(r){
-    var tries=0;
+    var n=0;
     (function check(){
       setTimeout(function(){
-        if(!cur||cur.r!==r||r._userPaused||!r._p||!r._p.getPlayerState)return;
-        var p=r._p,st=p.getPlayerState();
+        if(!cur||cur.r!==r||r._userPaused||!r._f)return;
+        var st=r._st;
         if(st===1)return;
-        if(st===3&&tries++<2){check();return}
+        if(st===3&&n++<6){check();return}
+        if(st!==3&&n++<3){cmd(r,"playVideo");check();return}
         if(!unlocked){startEl.classList.add("show")}
-        else{muted=true;setSound();applySound(p);p.playVideo()}
-      },1500);
+        else{muted=true;setSound();applySound(r);cmd(r,"playVideo")}
+      },700);
     })();
   }
   function guard(r){
-    clearTimeout(r._wd);clearTimeout(r._wd0);
-    r._wd=setTimeout(function(){ // jika 4 detik belum jalan
-      if(!cur||cur.r!==r||r._userPaused)return;
-      var p=r._p,st=(p&&p.getPlayerState)?p.getPlayerState():-9;
-      if(st===1)return;
-      if(st===-9){
-        var m=r.querySelector(".msg");
-        m.textContent="Pemutar YouTube belum termuat. Periksa koneksi, atau matikan pemblokir iklan/DNS.";
-        m.style.display="block";
-      }else if(!unlocked){startEl.classList.add("show")}
-    },4000);
-    r._wd0=setTimeout(function(){if(cur&&cur.r===r&&!r._p&&!r._fb)fallback(r)},5000);
+    clearTimeout(r._wd);
+    r._wd=setTimeout(function(){
+      if(!cur||cur.r!==r||r._userPaused||r._st===1||r._fb)return;
+      if(!r._hs){fallback(r);return} // pemutar tidak membalas sama sekali → iframe polos (autoplay)
+      if(!unlocked)startEl.classList.add("show");
+    },6000);
   }
   function fallback(r){
-    if(r._fb)return;
     destroy(r);
+    build(r,true);
     r._fb=true;r.classList.add("fb","playing");
-    var id=r.dataset.id,f=document.createElement("iframe");
-    f.src="https://www.youtube-nocookie.com/embed/"+id+"?autoplay=1&playsinline=1&rel=0&modestbranding=1&loop=1&playlist="+id;
-    f.allow="autoplay; encrypted-media; fullscreen";f.setAttribute("allowfullscreen","");
-    r.querySelector(".yt").appendChild(f);
   }
   function destroy(r){
-    clearTimeout(r._wd);clearTimeout(r._wd0);clearTimeout(r._pt);r._fb=false;r.classList.remove("fb");
-    if(r._p){try{r._p.destroy()}catch(e){}r._p=null}
-    live=live.filter(function(x){return x!==r});
-    r._ready=false;r._played=false;
+    clearTimeout(r._wd);clearTimeout(r._pt);clearInterval(r._li);
+    r._fb=false;r.classList.remove("fb","playing","paused");
     var h=r.querySelector(".yt");if(h)h.innerHTML="";
-    r.classList.remove("playing","paused");r._userPaused=false;
+    r._f=null;live=live.filter(function(x){return x!==r});
+    r._ready=false;r._played=false;r._st=-1;r._hs=0;r._userPaused=false;
     var m=r.querySelector(".msg");if(m)m.style.display="none";
   }
   function pauseReel(r){ // tidak dihancurkan: tetap siap supaya kalau kembali langsung tampil
-    clearTimeout(r._wd);clearTimeout(r._wd0);
+    clearTimeout(r._wd);
     r._userPaused=false;r.classList.remove("paused");
     if(r._fb){destroy(r);return}
-    if(r._p&&r._p.pauseVideo){try{r._p.pauseVideo()}catch(e){}}
+    cmd(r,"pauseVideo");
   }
   function playReel(r){
     r._userPaused=false;r.classList.remove("paused");
-    var p=r._p;
-    if(p&&r._ready){
-      if(r._played){try{p.seekTo(0,true)}catch(e){}}
-      applySound(p);try{p.playVideo()}catch(e){}
+    if(!r._f){build(r,true)}
+    else if(r._ready&&!r._fb){
+      if(r._played)cmd(r,"seekTo",[0,true]);
+      applySound(r);cmd(r,"playVideo");
       verify(r);
-    }else if(!p&&!r._fb){
-      whenAPI(function(){if(cur&&cur.r===r&&!r._p)build(r)});
     }
     guard(r);
   }
@@ -304,14 +324,12 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
     n=feed.children[i-BEHIND];if(n&&n.classList.contains("reel"))want.push(n);
     live.slice().forEach(function(x){if(x!==r&&want.indexOf(x)<0)destroy(x)});
     want.forEach(function(x,k){
-      if(x._p||x._fb)return;
+      if(x._f)return;
       clearTimeout(x._pt);
       x._pt=setTimeout(function(){
-        whenAPI(function(){
-          if(x._p||!cur)return;
-          var d=+x.dataset.i-(+cur.r.dataset.i);
-          if(d>=-BEHIND&&d<=AHEAD)build(x);
-        });
+        if(x._f||!cur)return;
+        var d=+x.dataset.i-(+cur.r.dataset.i);
+        if(d>=-BEHIND&&d<=AHEAD)build(x,false);
       },(k+1)*400);
     });
   }
@@ -328,9 +346,9 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
   startEl.addEventListener("click",function(){
     unlocked=true;muted=false;setSound();startEl.classList.remove("show");
     if(cur){
-      var rr=cur.r,p=rr._p;
-      if(p&&p.playVideo){applySound(p);try{p.playVideo()}catch(e){}}
-      else{destroy(rr);whenAPI(function(){if(cur&&cur.r===rr)build(rr)})}
+      var rr=cur.r;
+      if(rr._f&&rr._ready&&!rr._fb){applySound(rr);cmd(rr,"playVideo")}
+      else{destroy(rr);build(rr,true);guard(rr)}
     }
   });
 
@@ -343,7 +361,7 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
   // Perbarui bilah progres video aktif
   function fmt(t){if(!isFinite(t)||t<0)t=0;var m=Math.floor(t/60),x=Math.floor(t%60);return m+":"+(x<10?"0":"")+x}
   setInterval(function(){
-    if(!cur||!cur.r._p||!cur.r._paint||cur.r._drag)return;
+    if(!cur||!cur.r._f||!cur.r._paint||cur.r._drag)return;
     cur.r._paint();
   },250);
 
@@ -357,16 +375,19 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
     var seek=el("div","seek"),time=el("div","time"),tcur=el("span",null,"0:00"),tdur=el("span",null,"0:00");
     var track=el("div","track"),fill=document.createElement("i"),knob=document.createElement("b");
     time.appendChild(tcur);time.appendChild(tdur);track.appendChild(fill);track.appendChild(knob);seek.appendChild(time);seek.appendChild(track);
-    function P(){var p=r._p;return p&&p.getDuration?p:null}
+    function P(){return(r._f&&r._ready&&!r._fb)?r:null}
     r._paint=function(){
-      var p=P();if(!p)return;
-      var d=p.getDuration()||0,c=p.getCurrentTime()||0,pct=d?c/d*100:0;
+      if(!r._f||r._fb)return;
+      var d=r._d||0,c=r._t||0;
+      if(r._st===1&&r._tt)c+=(Date.now()-r._tt)/1000;
+      if(d&&c>d)c=d;
+      var pct=d?c/d*100:0;
       fill.style.width=pct+"%";knob.style.left=pct+"%";tcur.textContent=fmt(c);tdur.textContent=fmt(d);
     };
     function seekTo(ev){
-      var p=P();if(!p)return;
-      var rc=track.getBoundingClientRect(),f=Math.min(1,Math.max(0,(ev.clientX-rc.left)/rc.width)),d=p.getDuration();
-      if(d){p.seekTo(f*d,true);r._paint()}
+      if(!P()||!r._d)return;
+      var rc=track.getBoundingClientRect(),f=Math.min(1,Math.max(0,(ev.clientX-rc.left)/rc.width));
+      cmd(r,"seekTo",[f*r._d,true]);r._t=f*r._d;r._tt=Date.now();r._paint();
     }
     seek.addEventListener("pointerdown",function(ev){r._drag=true;seek.classList.add("drag");try{seek.setPointerCapture(ev.pointerId)}catch(e){}seekTo(ev);ev.stopPropagation()});
     seek.addEventListener("pointermove",function(ev){if(r._drag)seekTo(ev)});
@@ -377,17 +398,19 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
     var tipL=el("div","tip l","−10 detik"),tipR=el("div","tip r","+10 detik"),last=0,timer=null;
     function flash(t){t.classList.add("show");setTimeout(function(){t.classList.remove("show")},500)}
     function toggle(){
-      var p=P();if(!p)return;
-      if(p.getPlayerState()===1){r._userPaused=true;p.pauseVideo();r.classList.add("paused")}
-      else{r._userPaused=false;p.playVideo();r.classList.remove("paused")}
+      if(!P())return;
+      if(r._st===1){r._userPaused=true;cmd(r,"pauseVideo");r.classList.add("paused")}
+      else{r._userPaused=false;cmd(r,"playVideo");r.classList.remove("paused")}
     }
     tap.addEventListener("click",function(ev){
       var now=Date.now();
       if(now-last<300){ // ketuk dua kali: maju/mundur 10 detik
         clearTimeout(timer);last=0;
-        var p=P();if(!p)return;
-        var left=ev.clientX<r.getBoundingClientRect().left+r.offsetWidth/2,d=p.getDuration()||0;
-        p.seekTo(Math.min(Math.max(0,p.getCurrentTime()+(left?-10:10)),d?d-0.1:1e9),true);
+        if(!P())return;
+        var left=ev.clientX<r.getBoundingClientRect().left+r.offsetWidth/2,d=r._d||0;
+        var c=(r._t||0)+(r._st===1&&r._tt?(Date.now()-r._tt)/1000:0);
+        var nt=Math.min(Math.max(0,c+(left?-10:10)),d?d-0.1:1e9);
+        cmd(r,"seekTo",[nt,true]);r._t=nt;r._tt=Date.now();
         flash(left?tipL:tipR);r._paint();
       }else{last=now;timer=setTimeout(toggle,300)}
     });
@@ -399,7 +422,7 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
     var snd=el("button","btn snd",muted?"🔇":"🔊");snd.setAttribute("aria-label","Suara");
     snd.onclick=function(){
       muted=!muted;unlocked=true;setSound();
-      var p=P();if(p){applySound(p);if(p.getPlayerState()!==1&&!r._userPaused)p.playVideo()}
+      if(P()){applySound(r);if(r._st!==1&&!r._userPaused)cmd(r,"playVideo")}
       startEl.classList.remove("show");
     };
     var sh=el("button","btn");sh.setAttribute("aria-label","Bagikan");
