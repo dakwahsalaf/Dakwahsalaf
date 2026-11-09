@@ -207,7 +207,7 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
     host.innerHTML="";host.appendChild(d);
     var vars={autoplay:1,controls:0,playsinline:1,rel:0,modestbranding:1,fs:0,disablekb:1,iv_load_policy:3,enablejsapi:1};
     if(/^https?:$/.test(location.protocol))vars.origin=location.origin;
-    r._p=new YT.Player(d,{videoId:id,playerVars:vars,events:{
+    r._p=new YT.Player(d,{host:"https://www.youtube-nocookie.com",videoId:id,playerVars:vars,events:{
       onReady:function(e){
         var p=e.target;applySound(p);p.playVideo();
         var tries=0;
@@ -250,7 +250,7 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
     destroy(r);
     r._fb=true;r.classList.add("fb","playing");
     var id=r.dataset.id,f=document.createElement("iframe");
-    f.src="https://www.youtube.com/embed/"+id+"?autoplay=1&playsinline=1&rel=0&modestbranding=1&loop=1&playlist="+id;
+    f.src="https://www.youtube-nocookie.com/embed/"+id+"?autoplay=1&playsinline=1&rel=0&modestbranding=1&loop=1&playlist="+id;
     f.allow="autoplay; encrypted-media; fullscreen";f.setAttribute("allowfullscreen","");
     r.querySelector(".yt").appendChild(f);
   }
