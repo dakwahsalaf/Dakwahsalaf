@@ -154,6 +154,19 @@ body.h .top{background:#000}
 .gh1{max-width:1400px;margin:0 auto;padding:18px 12px 4px;font-size:26px;font-weight:800}
 .gh2{max-width:1400px;margin:0 auto;padding:8px 12px 2px;font-size:18px;font-weight:700;color:var(--acc)}
 .gh3{max-width:1400px;margin:0 auto;padding:4px 12px 4px;font-size:14px;font-weight:600;color:var(--mut)}
+#watch .wb{border:0;border-radius:18px;padding:9px 16px;font-weight:700;background:#2a2a2a;color:#fff;cursor:pointer;margin-right:8px}
+#watch .wth{border:0;border-radius:18px;padding:9px 16px;font-weight:700;background:#2a2a2a;color:#fff;cursor:pointer;margin-right:8px}
+#watch .wsp{border:0;border-radius:18px;padding:9px 16px;font-weight:700;background:#1db954;color:#04210f;cursor:pointer;margin-right:8px;display:none}
+.shov{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:900;display:flex;align-items:flex-end}
+.shs{background:#1a1a1a;color:#fff;width:100%;max-width:600px;margin:0 auto;border-radius:18px 18px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom,0px))}
+.shs h3{font-size:16px;margin:0 0 4px}.shs .sn{font-size:12px;opacity:.65;margin:0 0 12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.shs .lk{display:flex;gap:8px;margin-bottom:14px}.shs .lk input{flex:1;min-width:0;background:#000;border:1px solid #333;color:#fff;border-radius:10px;padding:10px;font-size:13px}
+.shs .lk button,.shs .yl{border:0;border-radius:10px;padding:10px 14px;font-weight:700;background:var(--acc);color:#04210f;cursor:pointer}
+.shs .gr{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.shs .gr button{border:0;background:#2a2a2a;color:#fff;border-radius:12px;padding:12px 4px;font-size:12px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px}
+.shs .gr b{font-size:20px;line-height:1}
+.shs label{display:flex;gap:8px;align-items:center;font-size:13px;margin:0 0 12px}
+.shs .yl{background:#2a2a2a;color:#fff;margin-top:12px;width:100%}
 </style>
 </head>
 <body>
@@ -246,6 +259,16 @@ var YT_API_KEY = "AIzaSyC0c-m00EzB3UTVzifTbnLOHdX_dfcfkCE";
 // Video tambahan satu per satu (ID video, tanpa perlu API key). Ditambahkan ke video dari channel di atas.
 // Contoh: "https://youtube.com/shorts/yk5HrF7n9Xs" -> ID-nya "yk5HrF7n9Xs"
 var EXTRA_IDS = ["yk5HrF7n9Xs"];
+
+// Spotify: isi bila channel punya podcast di Spotify. Tombol "Putar di Spotify" hanya muncul untuk channel yang diisi.
+// Kunci = handle channel (mis. "@amminurbaits") atau nama channel. Nilai = ID show Spotify (22 huruf/angka dari link
+// open.spotify.com/show/XXXXXXXXXXXXXXXXXXXXXX). Contoh:  "@amminurbaits": "4rOoJ6Egrf8K2IrywzwOMk",
+var SPOTIFY_SHOWS = {
+  "@firandaandirjaofficial": "1HPUjVnHJBULZTKH8KFyuB"
+};
+// Opsional, per video: ID video YouTube -> ID episode Spotify (dari link open.spotify.com/episode/XXXX), agar langsung ke episode itu.
+var SPOTIFY_EPISODES = {
+};
 
 var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
 /* ======================= */
@@ -702,6 +725,7 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
     if(v.lb==="live")th.appendChild(el("span","lv","LIVE"));
     else if(v.lb==="upcoming")th.appendChild(el("span","lv r","Akan tayang"));
     else{if(v.rec)th.appendChild(el("span","lv r","Rekaman live"));if(v.d!=null)th.appendChild(el("span","du",fmtL(v.d)))}
+    var pp=posOf(v.id);if(pp&&v.d>0){var pb=el("div","pgb");pb.style.cssText="position:absolute;left:0;bottom:0;height:3px;background:#f33;width:"+Math.min(100,Math.round(pp.t/v.d*100))+"%";th.appendChild(pb)}
     inf.appendChild(el("div","ti",v.t));
     me.textContent=(av?v.c+" · ":"")+(v.lb==="live"?"Sedang live":v.lb==="upcoming"?"Segera":ago(v.p));inf.appendChild(me);
     b.appendChild(th);b.onclick=function(){openWatch(v)};
@@ -1179,14 +1203,144 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
     var pl=watch.querySelector(".pl"),f=document.createElement("iframe"),wc=watch.querySelector(".wc");pl.innerHTML="";
     addHist({id:v.id,t:v.rt||v.t,c:v.c,ch:v.ch,d:v.d,th:v.th,s:short});
     pl.className="pl"+(short?" v":"");
-    f.src="https://www.youtube-nocookie.com/embed/"+v.id+"?autoplay=1&playsinline=1&rel=0&enablejsapi=1"+(list?"&list="+encodeURIComponent(list):"")+(/^https?:$/.test(location.protocol)?"&origin="+encodeURIComponent(location.origin):"");
+    var rp=short?null:(v.st>0?{t:v.st,d:0}:posOf(v.id));wCur={id:v.id,s:short};wTime=rp?rp.t:0;wDur=rp?rp.d:0;wLast=0;
+    f.src="https://www.youtube-nocookie.com/embed/"+v.id+"?autoplay=1&playsinline=1&rel=0&enablejsapi=1"+(rp?"&start="+rp.t:"")+(list?"&list="+encodeURIComponent(list):"")+(/^https?:$/.test(location.protocol)?"&origin="+encodeURIComponent(location.origin):"");
     f.allow="autoplay; encrypted-media; fullscreen";f.allowFullscreen=true;pl.appendChild(f);
     watch.querySelector(".wt").textContent=v.t;wc.textContent=v.c;
     wc.className="wc"+(v.ch?" lk":"");wc.onclick=v.ch?function(){closeWatch();openChannel(v.ch)}:null;
     watch.querySelector(".wy").onclick=function(){window.open(short?"https://www.youtube.com/shorts/"+v.id:"https://www.youtube.com/watch?v="+v.id,"_blank","noopener")};
     watch.classList.add("open");
     bgSet(v,f,short);
+    wV=v;
+    if(!watch.querySelector(".wb")){var sb=el("button","wb","Bagikan");sb.onclick=function(){openShare()};watch.querySelector(".info").insertBefore(sb,watch.querySelector(".wy"))}
+    var tb=watch.querySelector(".wth");
+    if(!tb){tb=el("button","wth","🖼 Thumbnail");watch.querySelector(".info").insertBefore(tb,watch.querySelector(".wy"))}
+    tb.onclick=function(){dlThumb(v,tb)};
+    var sp=watch.querySelector(".wsp");
+    if(!sp){sp=el("button","wsp","🎧 Putar di Spotify");watch.querySelector(".info").insertBefore(sp,watch.querySelector(".wy"))}
+    var sid=spotifyFor(v);sp.style.display=sid?"inline-block":"none";sp.onclick=function(){openSpotify(v,sid)};
+    var rs=watch.querySelector(".rs");if(!rs){rs=el("p","rs");rs.style.cssText="margin:6px 0;font-size:13px;opacity:.75";watch.querySelector(".info").insertBefore(rs,watch.querySelector(".wy"))}
+    rs.textContent=rp?"Dilanjutkan dari menit "+fmtL(rp.t):"";
+    var n=0;clearInterval(wLi);wLi=setInterval(function(){try{f.contentWindow.postMessage(JSON.stringify({event:"listening",id:1,channel:"widget"}),"*")}catch(e){}if(++n>8)clearInterval(wLi)},700);
   }
+  /* ---------- Unduh thumbnail ---------- */
+  function dlThumb(v,btn){
+    var names=["maxresdefault","sddefault","hqdefault"],i=0,lbl="🖼 Thumbnail";
+    function url(n){return"https://i.ytimg.com/vi/"+v.id+"/"+n+".jpg"}
+    function say(x){btn.textContent=x;setTimeout(function(){btn.textContent=lbl},2000)}
+    function fallback(){window.open(url("hqdefault"),"_blank","noopener");say("Tekan lama gambar → simpan")}
+    function next(){
+      if(i>=names.length)return fallback();
+      btn.textContent="Mengunduh…";
+      fetch(url(names[i++])).then(function(r){if(!r.ok)throw 0;return r.blob()}).then(function(b){
+        var a=document.createElement("a"),nm=String(v.rt||v.t||v.id).replace(/[\\/:*?"<>|]+/g," ").trim().slice(0,80)||v.id;
+        a.href=URL.createObjectURL(b);a.download=nm+".jpg";document.body.appendChild(a);a.click();
+        setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},1000);say("Tersimpan ✓");
+      }).catch(function(e){if(e instanceof TypeError)fallback();else next()});
+    }
+    next();
+  }
+  /* ---------- Spotify (untuk channel yang punya podcast) ---------- */
+  function spotifyFor(v){
+    var ep=(typeof SPOTIFY_EPISODES==="object"&&SPOTIFY_EPISODES[v.id]);
+    if(ep&&/^[A-Za-z0-9]{22}$/.test(ep))return{k:"episode",id:ep};
+    var key,h=String(v.ch||"").toLowerCase(),n=String(v.c||"").toLowerCase();
+    for(key in SPOTIFY_SHOWS){
+      var kk=key.toLowerCase();
+      if(/^[A-Za-z0-9]{22}$/.test(SPOTIFY_SHOWS[key])&&((h&&h.indexOf(kk)>-1)||(n&&n===kk)))return{k:"show",id:SPOTIFY_SHOWS[key]};
+    }
+    return null;
+  }
+  function openSpotify(v,sid){
+    if(!sid)return;
+    bgPaused=true;bgCmd("pauseVideo");
+    var old=document.querySelector(".shov");if(old)old.remove();
+    var ov=el("div","shov"),sh=el("div","shs"),t=v.rt||v.t||"Video";
+    sh.appendChild(el("h3",null,"Putar di Spotify"));sh.appendChild(el("p","sn",sid.k==="episode"?"Episode ini di Spotify":"Podcast "+(v.c||"channel")+" — pilih episode yang sama dengan video"));
+    var f=document.createElement("iframe");
+    f.src="https://open.spotify.com/embed/"+sid.k+"/"+sid.id+"?theme=0";
+    f.style.cssText="width:100%;border:0;border-radius:12px;height:"+(sid.k==="episode"?"232px":"352px");
+    f.allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture";f.loading="lazy";
+    sh.appendChild(f);
+    var web="https://open.spotify.com/"+sid.k+"/"+sid.id;
+    var b2=el("button","yl","Buka di aplikasi Spotify");
+    b2.style.cssText="background:#1db954;color:#04210f";
+    b2.onclick=function(){
+      var done=false;function vis(){if(document.hidden)done=true}document.addEventListener("visibilitychange",vis);
+      if(/Android|iPhone|iPad/i.test(navigator.userAgent))location.href="spotify://"+sid.k+"/"+sid.id;
+      setTimeout(function(){document.removeEventListener("visibilitychange",vis);if(!done)window.open(web,"_blank","noopener")},1500);
+    };
+    sh.appendChild(b2);
+    var b1=el("button","yl","Cari judul ini di Spotify");b1.onclick=function(){window.open("https://open.spotify.com/search/"+encodeURIComponent(t),"_blank","noopener")};sh.appendChild(b1);
+    var w=el("p","sn","Untuk mengunduh episode (butuh Spotify Premium) dan memutar saat layar mati, buka lewat aplikasi Spotify. Pemutar di atas berhenti saat layar mati, dan tanpa login hanya memutar cuplikan. Video YouTube dijeda agar suaranya tidak bertumpuk.");w.style.whiteSpace="normal";w.style.marginTop="10px";sh.appendChild(w);
+    ov.appendChild(sh);ov.onclick=function(e){if(e.target===ov)ov.remove()};document.body.appendChild(ov);
+  }
+  /* ---------- Bagikan video ---------- */
+  var wV=null;
+  function appLink(id,t){
+    var base=/^https?:$/.test(location.protocol)?location.origin+location.pathname:location.href.split(/[?#]/)[0];
+    return base+"?v="+id+(t>5?"&t="+Math.floor(t):"");
+  }
+  function copyText(x,btn,lbl){
+    function ok(){if(btn){var o=btn.textContent;btn.textContent=lbl||"Tersalin ✓";setTimeout(function(){btn.textContent=o},1600)}}
+    function fb(){var a=document.createElement("textarea");a.value=x;a.style.cssText="position:fixed;opacity:0";document.body.appendChild(a);a.select();try{document.execCommand("copy");ok()}catch(e){}document.body.removeChild(a)}
+    if(navigator.clipboard&&window.isSecureContext)navigator.clipboard.writeText(x).then(ok,fb);else fb();
+  }
+  function openShare(){
+    if(!wV)return;
+    var v=wV,ov=el("div","shov"),sh=el("div","shs"),old=document.querySelector(".shov");if(old)old.remove();
+    var t=wV.rt||wV.t||"Video",canT=!wV.s&&wTime>10&&wCur&&wCur.id===v.id;
+    sh.appendChild(el("h3",null,"Bagikan video"));sh.appendChild(el("p","sn",t));
+    var row=el("div","lk"),inp=el("input");inp.readOnly=true;var cb=el("button",null,"Salin");row.appendChild(inp);row.appendChild(cb);sh.appendChild(row);
+    var cbx=null;
+    if(canT){var lb=el("label");cbx=el("input");cbx.type="checkbox";lb.appendChild(cbx);lb.appendChild(document.createTextNode("Mulai dari menit "+fmtL(wTime)));sh.appendChild(lb)}
+    function link(){return appLink(v.id,cbx&&cbx.checked?wTime:0)}
+    function msg(){return t+"\n"+link()}
+    function sync(){inp.value=link()}sync();if(cbx)cbx.onchange=sync;
+    inp.onfocus=function(){inp.select()};
+    cb.onclick=function(){copyText(link(),cb)};
+    var gr=el("div","gr");
+    function add(ic,name,fn){var b=el("button");b.appendChild(el("b",null,ic));b.appendChild(document.createTextNode(name));b.onclick=fn;gr.appendChild(b)}
+    function go(u){return function(){window.open(u(),"_blank","noopener")}}
+    var E=encodeURIComponent;
+    add("💬","WhatsApp",go(function(){return"https://wa.me/?text="+E(msg())}));
+    add("✈️","Telegram",go(function(){return"https://t.me/share/url?url="+E(link())+"&text="+E(t)}));
+    add("📘","Facebook",go(function(){return"https://www.facebook.com/sharer/sharer.php?u="+E(link())}));
+    add("𝕏","X",go(function(){return"https://twitter.com/intent/tweet?text="+E(t)+"&url="+E(link())}));
+    add("✉️","Email",function(){location.href="mailto:?subject="+E(t)+"&body="+E(msg())});
+    add("📱","SMS",function(){location.href="sms:?&body="+E(msg())});
+    add("📋","Salin teks",function(e){copyText(msg(),e.currentTarget,"Tersalin ✓")});
+    if(navigator.share)add("⋯","Lainnya",function(){navigator.share({title:t,text:t,url:link()}).catch(function(){})});
+    sh.appendChild(gr);
+    var yl=el("button","yl","Salin link YouTube");yl.onclick=function(){copyText("https://www.youtube.com/watch?v="+v.id+(cbx&&cbx.checked?"&t="+Math.floor(wTime)+"s":""),yl)};sh.appendChild(yl);
+    if(!/^https?:$/.test(location.protocol)){var w=el("p","sn","Catatan: link ke app hanya berfungsi bila app dibuka dari alamat web (https), bukan dari file lokal.");w.style.whiteSpace="normal";w.style.marginTop="10px";sh.appendChild(w)}
+    ov.appendChild(sh);ov.onclick=function(e){if(e.target===ov)ov.remove()};document.body.appendChild(ov);
+  }
+  /* ---------- Simpan waktu terakhir ditonton ---------- */
+  var POSK="dakwah_pos_v1",wCur=null,wLast=0,wTime=0,wDur=0,wLi=0;
+  function posAll(){var a=load(POSK,{});return a&&typeof a==="object"?a:{}}
+  function posOf(id){var p=posAll()[id];return p&&p.t>5?p:null}
+  function posSave(force){
+    if(!wCur||wCur.s||!(wTime>0))return;
+    var now=Date.now();if(!force&&now-wLast<4000)return;wLast=now;
+    var a=posAll();
+    if(wDur>30&&wTime>wDur-15)delete a[wCur.id];else a[wCur.id]={t:Math.floor(wTime),d:Math.floor(wDur),u:now};
+    var k=Object.keys(a);if(k.length>300){k.sort(function(x,y){return a[x].u-a[y].u}).slice(0,k.length-300).forEach(function(i){delete a[i]})}
+    save(POSK,a);
+  }
+  window.addEventListener("message",function(e){
+    if(e.origin!==ORIGIN||!bgF||!wCur||e.source!==bgF.contentWindow)return;
+    var d=e.data;if(typeof d==="string"){try{d=JSON.parse(d)}catch(x){return}}
+    if(!d||!d.event)return;var i=d.info;
+    if(d.event==="onStateChange"&&i===0){var a=posAll();delete a[wCur.id];save(POSK,a);wTime=0;return}
+    if(d.event==="onStateChange"&&(i===2)){posSave(true);return}
+    if(d.event==="infoDelivery"&&i){
+      if(typeof i.duration==="number"&&i.duration>0)wDur=i.duration;
+      if(typeof i.currentTime==="number"&&i.currentTime>0){wTime=i.currentTime;posSave()}
+    }
+  });
+  document.addEventListener("visibilitychange",function(){if(document.hidden)posSave(true)});
+  window.addEventListener("pagehide",function(){posSave(true)});
   /* ---------- Putar di latar belakang / layar mati ---------- */
   var bgF=null,bgOn=false,bgPaused=false,bgTm=0;
   function bgCmd(fn){try{if(bgF&&bgF.contentWindow)bgF.contentWindow.postMessage(JSON.stringify({event:"command",func:fn,args:[]}),"*")}catch(e){}}
@@ -1209,7 +1363,7 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
   }
   document.addEventListener("visibilitychange",function(){if(document.hidden)bgResume()});
   window.addEventListener("pagehide",bgResume);
-  function closeWatch(){bgOn=false;bgF=null;try{if("mediaSession" in navigator){navigator.mediaSession.playbackState="none";navigator.mediaSession.metadata=null}}catch(e){}var was=watch.classList.contains("open");watch.classList.remove("open");watch.querySelector(".pl").innerHTML="";if(was&&tab==="history")renderHist()}
+  function closeWatch(){var so=document.querySelector(".shov");if(so)so.remove();posSave(true);wCur=null;clearInterval(wLi);bgOn=false;bgF=null;try{if("mediaSession" in navigator){navigator.mediaSession.playbackState="none";navigator.mediaSession.metadata=null}}catch(e){}var was=watch.classList.contains("open");watch.classList.remove("open");watch.querySelector(".pl").innerHTML="";if(was&&tab==="history")renderHist()}
   watch.querySelector(".wx").onclick=closeWatch;
   /* ---------- Peta di dalam app ---------- */
   var mapv=document.getElementById("mapv");
@@ -1258,6 +1412,13 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
   }
   tabsEl.addEventListener("click",function(e){var b=e.target.closest("button");if(!b)return;if(b.dataset.t!==tab)setTab(b.dataset.t);else chp.classList.remove("open")});
   setTab(tab);loadHome();
+  (function(){
+    var q=new URLSearchParams(location.search),id=q.get("v"),st=parseInt(q.get("t"),10)||0;
+    if(!id||!/^[\w-]{11}$/.test(id))return;
+    want=null;try{history.replaceState(null,"",location.pathname)}catch(e){}
+    var fb={id:id,t:"Video dakwah",c:"",d:0,th:"https://i.ytimg.com/vi/"+id+"/mqdefault.jpg",st:st};
+    (YT_API_KEY?details([id]):Promise.resolve([])).then(function(a){var v=a[0]||fb;v.st=st;openWatch(v,null,false)}).catch(function(){openWatch(fb,null,false)});
+  })();
 
   if(!EXTRA_IDS.length&&(!YT_CHANNELS.length||!YT_API_KEY)){
     showMsg("Channel belum diatur","Isi YT_CHANNELS dan YT_API_KEY di bagian PENGATURAN pada file ini.");
