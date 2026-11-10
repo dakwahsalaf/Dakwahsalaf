@@ -138,6 +138,22 @@ body.h .top{background:#000}
 .ab{padding:14px 16px;white-space:pre-wrap;line-height:1.5;font-size:14px;color:var(--mut)}
 #oth{position:fixed;left:0;right:0;top:0;bottom:calc(56px + env(safe-area-inset-bottom,0px));overflow-y:auto;background:#000;display:none;padding:calc(52px + env(safe-area-inset-top,0px)) 0 16px}
 #watch .pl.v{width:min(100%,calc((100dvh - 130px) * .5625));aspect-ratio:9/16}
+#watch .pl{position:relative}
+#watch .pn{position:absolute;left:0;right:0;top:0;bottom:56px;z-index:2;touch-action:none;cursor:pointer}
+#watch .pn.paused::after{content:"▶";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:54px;color:#fff;opacity:.85;text-shadow:0 2px 8px #000}
+#watch .pc{position:absolute;right:8px;top:8px;z-index:3;background:rgba(0,0,0,.55);color:#fff;font-size:12px;padding:3px 9px;border-radius:12px;pointer-events:none}
+#watch .ph{position:absolute;left:50%;bottom:70px;transform:translateX(-50%);z-index:3;background:rgba(0,0,0,.6);color:#fff;font-size:12px;padding:6px 12px;border-radius:14px;pointer-events:none;white-space:nowrap;animation:phf 3.5s forwards}
+@keyframes phf{0%,70%{opacity:1}100%{opacity:0}}
+#watch .pl.v{overflow:hidden}
+#watch .sf{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;scroll-snap-type:y mandatory;overscroll-behavior:contain;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+#watch .sf::-webkit-scrollbar{display:none}
+#watch .ss{position:relative;height:100%;scroll-snap-align:start;scroll-snap-stop:always;background:#000 center/cover no-repeat}
+#watch .ss iframe{position:absolute;inset:0;z-index:1}
+#watch .ss .pn{inset:0;bottom:0;z-index:2;touch-action:pan-y}
+#watch .pl.su{animation:shu .25s ease-out}
+#watch .pl.sd{animation:shd .25s ease-out}
+@keyframes shu{from{transform:translateY(40px);opacity:.3}to{transform:none;opacity:1}}
+@keyframes shd{from{transform:translateY(-40px);opacity:.3}to{transform:none;opacity:1}}
 #watch .wc.lk{cursor:pointer;text-decoration:underline}
 .ci{flex:1;min-width:0;border:0;border-radius:16px;padding:8px 14px;background:rgba(255,255,255,.12);color:#fff;font:inherit;font-size:13px;outline:none}
 .ci::placeholder{color:var(--mut)}
@@ -367,19 +383,23 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
       return [];
     });
   }
-  // Cepat: selesai begitu channel PERTAMA yang berisi video siap (tidak menunggu semua channel).
-  // Channel yang menyusul langsung dimasukkan ke pool lewat onMore, jadi ikut teracak di batch berikutnya.
+  // Tunggu semua channel selesai, tetapi paling lama 2 detik (asal sudah ada channel yang berisi video),
+  // supaya batch pertama sudah bercampur dari banyak channel. Channel yang menyusul langsung dimasukkan
+  // ke pool lewat onMore, jadi ikut teracak di batch berikutnya.
+  var WAIT_MS=2000;
   function fetchList(onMore){
     return new Promise(function(resolve,reject){
-      var chs=YT_API_KEY?YT_CHANNELS:[],all=EXTRA_IDS.slice(),done=0,first=false;
-      function fin(){first=true;all.length?resolve(all):reject(new Error("Tidak ada video"))}
+      var chs=YT_API_KEY?YT_CHANNELS:[],all=EXTRA_IDS.slice(),done=0,got=0,first=false,late=false,timer=null;
+      function fin(){if(first)return;first=true;clearTimeout(timer);all.length?resolve(all):reject(new Error("Tidak ada video"))}
       if(!chs.length){fin();return}
+      timer=setTimeout(function(){late=true;if(got)fin()},WAIT_MS);
       chs.forEach(function(ch){
         fetchChannel(ch).then(function(l){
           done++;
           if(first){onMore(l);return}
           all=all.concat(l);
-          if(l.length||done===chs.length)fin();
+          if(l.length)got++;
+          if(done===chs.length||(late&&got))fin();
         });
       });
     });
@@ -1163,7 +1183,7 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
       if(tk!==cTab)return;body.innerHTML="";
       if(!a.length){body.appendChild(el("div","ab",tk==="l"?"Belum ada live.":"Belum ada video."));return}
       var so=el("div","so"),host=el("div",tk==="s"?"gs":"grid");
-      function put(b){host.innerHTML="";b.forEach(function(v){v.ch=curCh;var c=card(v,0);c.onclick=function(){openWatch(v,null,tk==="s")};host.appendChild(c)})}
+      function put(b){host.innerHTML="";b.forEach(function(v,ix){v.ch=curCh;var c=card(v,0);c.onclick=function(){openWatch(v,null,tk==="s",tk==="s"?{a:b,i:ix}:null)};host.appendChild(c)})}
       function draw(){
         var sk=cSort;
         if(sk==="o"){
@@ -1245,17 +1265,71 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
       draw();
     });
   }
-  function openWatch(v,list,short){
-    var pl=watch.querySelector(".pl"),f=document.createElement("iframe"),wc=watch.querySelector(".wc");pl.innerHTML="";
+  /* ---------- Geser antar Short di halaman channel ---------- */
+  var wCtx=null,wPaused=false,shHint=false,wWheel=0;
+  function actPn(){return watch.querySelector(".ss.on .pn")||watch.querySelector(".pn")}
+  function togglePlay(){
+    var pn=actPn();
+    if(wPaused){bgPaused=false;bgCmd("playVideo");wPaused=false}else{bgPaused=true;bgCmd("pauseVideo");wPaused=true}
+    if(pn)pn.classList.toggle("paused",wPaused);
+  }
+  function goShort(d){
+    if(!wCtx)return;
+    var n=wCtx.i+d,a=wCtx.a,sf=watch.querySelector(".sf");
+    if(n<0||n>=a.length||!sf)return;
+    sf.scrollTo({top:n*sf.clientHeight,behavior:"smooth"});
+  }
+  // Daftar short bisa digulir seperti feed: tiap short satu "halaman", hanya short aktif yang memutar video
+  function buildFeed(pl,ctx){
+    var sf=el("div","sf"),tm=0;
+    ctx.a.forEach(function(x){
+      var sl=el("div","ss"),pn=el("div","pn");
+      sl.style.backgroundImage="url(https://i.ytimg.com/vi/"+x.id+"/hqdefault.jpg)";
+      pn.onclick=togglePlay;sl.appendChild(pn);sf.appendChild(sl);
+    });
+    pl.appendChild(sf);
+    sf.addEventListener("scroll",function(){
+      clearTimeout(tm);
+      tm=setTimeout(function(){
+        var h=sf.clientHeight;if(!h||!wCtx)return;
+        var n=Math.round(sf.scrollTop/h);
+        if(n!==wCtx.i&&n>=0&&n<wCtx.a.length)openWatch(wCtx.a[n],null,true,{a:wCtx.a,i:n,keep:1});
+      },130);
+    });
+    return sf;
+  }
+  watch.addEventListener("wheel",function(e){
+    if(!wCtx||(e.target.closest&&e.target.closest(".info")))return;
+    var now=Date.now();if(now-wWheel<600||Math.abs(e.deltaY)<20)return;
+    wWheel=now;e.preventDefault();goShort(e.deltaY>0?1:-1);
+  },{passive:false});
+  document.addEventListener("keydown",function(e){
+    if(!wCtx||!watch.classList.contains("open"))return;
+    if(e.key==="ArrowDown"){e.preventDefault();goShort(1)}else if(e.key==="ArrowUp"){e.preventDefault();goShort(-1)}
+  });
+  function openWatch(v,list,short,ctx){
+    var pl=watch.querySelector(".pl"),f=document.createElement("iframe"),wc=watch.querySelector(".wc");
+    var feedOn=!!(short&&ctx&&ctx.a&&ctx.a.length>1),keep=feedOn&&ctx.keep&&!!pl.querySelector(".sf");
+    if(!keep)pl.innerHTML="";
     addHist({id:v.id,t:v.rt||v.t,c:v.c,ch:v.ch,d:v.d,th:v.th,s:short});
     pl.className="pl"+(short?" v":"");
     var rp=short?null:(v.st>0?{t:v.st,d:0}:posOf(v.id));wCur={id:v.id,s:short};wTime=rp?rp.t:0;wDur=rp?rp.d:0;wLast=0;
-    f.src="https://www.youtube-nocookie.com/embed/"+v.id+"?autoplay=1&playsinline=1&rel=0&enablejsapi=1"+(rp?"&start="+rp.t:"")+(list?"&list="+encodeURIComponent(list):"")+(/^https?:$/.test(location.protocol)?"&origin="+encodeURIComponent(location.origin):"");
-    f.allow="autoplay; encrypted-media; fullscreen";f.allowFullscreen=true;pl.appendChild(f);
+    f.src="https://www.youtube-nocookie.com/embed/"+v.id+"?autoplay=1&playsinline=1&rel=0&enablejsapi=1"+(feedOn?"&controls=0&loop=1&playlist="+v.id:"")+(rp?"&start="+rp.t:"")+(list?"&list="+encodeURIComponent(list):"")+(/^https?:$/.test(location.protocol)?"&origin="+encodeURIComponent(location.origin):"");
+    f.allow="autoplay; encrypted-media; fullscreen";f.allowFullscreen=true;
+    wCtx=feedOn?{a:ctx.a,i:ctx.i}:null;wPaused=false;
+    if(feedOn){
+      var sf=keep?pl.querySelector(".sf"):buildFeed(pl,wCtx);
+      if(keep)[].forEach.call(sf.children,function(s){s.classList.remove("on");s.firstChild.classList.remove("paused");var o=s.querySelector("iframe");if(o)o.remove()});
+      var sl=sf.children[wCtx.i];sl.classList.add("on");sl.appendChild(f);
+      var pc=pl.querySelector(".pc");if(!pc){pc=el("div","pc");pl.appendChild(pc)}
+      pc.textContent=(wCtx.i+1)+" / "+wCtx.a.length;
+      if(!keep&&!shHint){shHint=true;pl.appendChild(el("div","ph","↑ Gulir untuk short berikutnya"))}
+    }else pl.appendChild(f);
     watch.querySelector(".wt").textContent=v.t;wc.textContent=v.c;
     wc.className="wc"+(v.ch?" lk":"");wc.onclick=v.ch?function(){closeWatch();openChannel(v.ch)}:null;
     watch.querySelector(".wy").onclick=function(){window.open(short?"https://www.youtube.com/shorts/"+v.id:"https://www.youtube.com/watch?v="+v.id,"_blank","noopener")};
     watch.classList.add("open");
+    if(feedOn&&!keep){var sf0=pl.querySelector(".sf");sf0.scrollTop=wCtx.i*sf0.clientHeight}
     bgSet(v,f,short);
     wV=v;
     if(!watch.querySelector(".wb")){var sb=el("button","wb","Bagikan");sb.onclick=function(){openShareSheet()};watch.querySelector(".info").insertBefore(sb,watch.querySelector(".wy"))}
@@ -1365,6 +1439,7 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
     if(e.origin!==ORIGIN||!bgF||!wCur||e.source!==bgF.contentWindow)return;
     var d=e.data;if(typeof d==="string"){try{d=JSON.parse(d)}catch(x){return}}
     if(!d||!d.event)return;var i=d.info;
+    if(d.event==="onStateChange"&&(i===1||i===2)){wPaused=i===2;var q=actPn();if(q)q.classList.toggle("paused",wPaused)}
     if(d.event==="onStateChange"&&i===0){var a=posAll();delete a[wCur.id];save(POSK,a);wTime=0;return}
     if(d.event==="onStateChange"&&(i===2)){posSave(true);return}
     if(d.event==="infoDelivery"&&i){
@@ -1396,7 +1471,7 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
   }
   document.addEventListener("visibilitychange",function(){if(document.hidden)bgResume()});
   window.addEventListener("pagehide",bgResume);
-  function closeWatch(){var so=document.querySelector(".shov");if(so)so.remove();posSave(true);wCur=null;clearInterval(wLi);bgOn=false;bgF=null;try{if("mediaSession" in navigator){navigator.mediaSession.playbackState="none";navigator.mediaSession.metadata=null}}catch(e){}var was=watch.classList.contains("open");watch.classList.remove("open");watch.querySelector(".pl").innerHTML="";if(was&&tab==="history")renderHist()}
+  function closeWatch(){wCtx=null;var so=document.querySelector(".shov");if(so)so.remove();posSave(true);wCur=null;clearInterval(wLi);bgOn=false;bgF=null;try{if("mediaSession" in navigator){navigator.mediaSession.playbackState="none";navigator.mediaSession.metadata=null}}catch(e){}var was=watch.classList.contains("open");watch.classList.remove("open");watch.querySelector(".pl").innerHTML="";if(was&&tab==="history")renderHist()}
   watch.querySelector(".wx").onclick=closeWatch;
   /* ---------- Peta di dalam app ---------- */
   var mapv=document.getElementById("mapv");
