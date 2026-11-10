@@ -13,6 +13,7 @@
 <link rel="preconnect" href="https://www.youtube-nocookie.com" crossorigin>
 <link rel="preconnect" href="https://i.ytimg.com" crossorigin>
 <link rel="preconnect" href="https://www.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://www.youtube.com" crossorigin>
 <link rel="dns-prefetch" href="https://s.ytimg.com">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
@@ -364,13 +365,21 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
       return [];
     });
   }
-  function fetchList(){
-    var jobs=(YT_API_KEY?YT_CHANNELS:[]).map(fetchChannel);
-    return Promise.all(jobs).then(function(lists){
-      var all=EXTRA_IDS.slice();
-      lists.forEach(function(l){all=all.concat(l)});
-      if(!all.length)throw new Error("Tidak ada video");
-      return all;
+  // Cepat: selesai begitu channel PERTAMA yang berisi video siap (tidak menunggu semua channel).
+  // Channel yang menyusul langsung dimasukkan ke pool lewat onMore, jadi ikut teracak di batch berikutnya.
+  function fetchList(onMore){
+    return new Promise(function(resolve,reject){
+      var chs=YT_API_KEY?YT_CHANNELS:[],all=EXTRA_IDS.slice(),done=0,first=false;
+      function fin(){first=true;all.length?resolve(all):reject(new Error("Tidak ada video"))}
+      if(!chs.length){fin();return}
+      chs.forEach(function(ch){
+        fetchChannel(ch).then(function(l){
+          done++;
+          if(first){onMore(l);return}
+          all=all.concat(l);
+          if(l.length||done===chs.length)fin();
+        });
+      });
     });
   }
 
@@ -1447,12 +1456,16 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
     showMsg("Channel belum diatur","Isi YT_CHANNELS dan YT_API_KEY di bagian PENGATURAN pada file ini.");
     return;
   }
-  fetchList().then(function(items){
+  fetchList(function(more){ // channel yang selesai belakangan: tambahkan ke pool
+    more.forEach(function(x){if(/^[\w-]{11}$/.test(x)&&pool.indexOf(x)<0)pool.push(x)});
+  }).then(function(items){
     pool=items.filter(function(x,i){return /^[\w-]{11}$/.test(x)&&items.indexOf(x)===i});
     if(!pool.length){showMsg("Video belum tersedia");return}
-    feed.innerHTML="";addBatch();
+    feed.innerHTML="";
+    // batch pertama kecil (20 video) supaya cepat dirender; batch berikutnya memuat pool lengkap dari semua channel
+    shuffled().slice(0,20).forEach(addReel);
     // siapkan dua short pertama di latar belakang agar tab Short langsung siap saat dibuka
-    if(tab!=="short"){[0,1].forEach(function(k){var r=feed.children[k];if(r&&r.classList.contains("reel"))setTimeout(function(){if(!r._f&&!cur)build(r,false)},400+k*400)})}
+    if(tab!=="short"){[0,1].forEach(function(k){var r=feed.children[k];if(r&&r.classList.contains("reel"))setTimeout(function(){if(!r._f&&!cur)build(r,false)},k*250)})}
   }).catch(function(e){console.error(e);showMsg("Video belum tersedia","Periksa link channel dan API key, lalu coba lagi.")});
 })();
 
