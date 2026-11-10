@@ -1,4 +1,4 @@
-const V = "dakwah-shell-v17";
+const V = "dakwah-shell-v18";
 const SHELL = ["./", "index.html", "manifest.json", "icon-192.png", "icon-512.png"];
 
 self.addEventListener("install", e => {
