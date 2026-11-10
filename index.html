@@ -10,6 +10,10 @@
 <meta property="og:title" content="Dakwah Salaf">
 <meta property="og:description" content="Tonton video dakwah, geser untuk video berikutnya.">
 <meta property="og:image" content="https://dakwahsalaf.github.io/Dakwahsalaf/icon-512.png">
+<link rel="preconnect" href="https://www.youtube-nocookie.com" crossorigin>
+<link rel="preconnect" href="https://i.ytimg.com" crossorigin>
+<link rel="preconnect" href="https://www.googleapis.com" crossorigin>
+<link rel="dns-prefetch" href="https://s.ytimg.com">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -23,7 +27,8 @@
 html,body{height:100%;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden}
 #feed{height:calc(100% - 56px - env(safe-area-inset-bottom,0px));overflow-y:scroll;scroll-snap-type:y mandatory;overscroll-behavior:contain;scrollbar-width:none}
 #feed::-webkit-scrollbar{display:none}
-.reel{position:relative;height:100%;scroll-snap-align:start;scroll-snap-stop:always;background:#000;overflow:hidden}
+.reel{position:relative;height:100%;scroll-snap-align:start;scroll-snap-stop:always;background:#000;overflow:hidden;contain:layout paint}
+.btn.q{font-size:12px;font-weight:700}
 .poster{position:absolute;inset:0;background:#000 center/cover no-repeat;transition:opacity .25s}
 .reel.playing .poster{opacity:0}
 .yt{position:absolute;inset:0}
@@ -341,7 +346,16 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
     if(!r._f||!r._f.contentWindow)return;
     try{r._f.contentWindow.postMessage(JSON.stringify({event:"command",func:func,args:args||[]}),ORIGIN)}catch(e){}
   }
-  function applySound(r){if(muted)cmd(r,"mute");else{cmd(r,"unMute");cmd(r,"setVolume",[100])}}
+  // Resolusi: Otomatis (dipilih YouTube sesuai jaringan & ukuran layar) atau tetap di 360p/480p/720p/1080p
+  var QS=[["auto","Otomatis"],["medium","360p"],["large","480p"],["hd720","720p"],["hd1080","1080p"]],qi=+load("dakwah_q_v1",0)||0;
+  if(qi<0||qi>=QS.length)qi=0;
+  function qLabel(){return qi===0?"Auto":QS[qi][1]}
+  function applyQuality(r){
+    var q=QS[qi][0];
+    if(q==="auto"){if(r._qs){cmd(r,"setPlaybackQuality",["default"]);r._qs=0}return}
+    r._qs=1;cmd(r,"setPlaybackQuality",[q]);cmd(r,"setPlaybackQualityRange",[q,q]);
+  }
+  function applySound(r){if(muted)cmd(r,"mute");else{cmd(r,"unMute");cmd(r,"setVolume",[100])}applyQuality(r)}
 
   function build(r,auto){
     if(r._f)return;
@@ -368,7 +382,7 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
     var isNow=!!(cur&&cur.r===r);
     if(st===1){
       if(!isNow||tab!=="short"){cmd(r,"pauseVideo");return}
-      r._played=true;
+      r._played=true;applyQuality(r);
       r.classList.add("playing");r.classList.remove("paused");startEl.classList.remove("show");r.querySelector(".msg").style.display="none";
     }else if(st===2){
       if(isNow)r.classList.add("paused");
@@ -469,7 +483,7 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
         if(x._f||!cur)return;
         var d=+x.dataset.i-(+cur.r.dataset.i);
         if(d>=-BEHIND&&d<=AHEAD)build(x,false);
-      },(k+1)*400);
+      },(k+1)*150);
     });
   }
   function activate(r){
@@ -565,13 +579,20 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
       if(P()){applySound(r);if(r._st!==1&&!r._userPaused)cmd(r,"playVideo")}
       startEl.classList.remove("show");
     };
+    var qb=el("button","btn q",qLabel());qb.setAttribute("aria-label","Resolusi video");
+    qb.onclick=function(){
+      qi=(qi+1)%QS.length;save("dakwah_q_v1",qi);
+      document.querySelectorAll(".btn.q").forEach(function(b){b.textContent=qLabel()});
+      live.forEach(applyQuality);
+      say("Resolusi: "+QS[qi][1]);
+    };
     var sh=el("button","btn");sh.setAttribute("aria-label","Bagikan");
     sh.innerHTML='<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg>';
     sh.onclick=function(){openShare(id)};
     var yt=el("button","btn");yt.setAttribute("aria-label","Buka di YouTube");
     yt.innerHTML='<svg width="22" height="22" viewBox="0 0 24 24" fill="#fff"><path d="M21.6 7.2a2.5 2.5 0 0 0-1.8-1.8C18.2 5 12 5 12 5s-6.2 0-7.8.4A2.5 2.5 0 0 0 2.4 7.2C2 8.8 2 12 2 12s0 3.2.4 4.8a2.5 2.5 0 0 0 1.8 1.8C5.8 19 12 19 12 19s6.2 0 7.8-.4a2.5 2.5 0 0 0 1.8-1.8c.4-1.6.4-4.8.4-4.8s0-3.2-.4-4.8zM10 15V9l5.2 3z"/></svg>';
     yt.onclick=function(){window.open("https://www.youtube.com/shorts/"+id,"_blank","noopener")};
-    side.appendChild(like);side.appendChild(snd);side.appendChild(sh);side.appendChild(yt);
+    side.appendChild(like);side.appendChild(snd);side.appendChild(qb);side.appendChild(sh);side.appendChild(yt);
 
     r.appendChild(poster);r.appendChild(host);r.appendChild(msg);r.appendChild(tap);
     r.appendChild(el("div","pp","▶"));r.appendChild(tipL);r.appendChild(tipR);r.appendChild(side);r.appendChild(seek);
@@ -1125,6 +1146,8 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
     pool=items.filter(function(x,i){return /^[\w-]{11}$/.test(x)&&items.indexOf(x)===i});
     if(!pool.length){showMsg("Video belum tersedia");return}
     feed.innerHTML="";addBatch();
+    // siapkan dua short pertama di latar belakang agar tab Short langsung siap saat dibuka
+    if(tab!=="short"){[0,1].forEach(function(k){var r=feed.children[k];if(r&&r.classList.contains("reel"))setTimeout(function(){if(!r._f&&!cur)build(r,false)},1500+k*800)})}
   }).catch(function(e){console.error(e);showMsg("Video belum tersedia","Periksa link channel dan API key, lalu coba lagi.")});
 })();
 
