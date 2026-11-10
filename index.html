@@ -308,7 +308,7 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
 
 (function(){
   var CACHE="dakwah_yt_cache_v2", TTL=30*60*1000, LIKE="dakwah_likes_v2";
-  var feed=document.getElementById("feed"), muted=true, unlocked=false, autoMuted=true, skipTap=0, likes={}, pool=[], total=0, lastId="", want=null, cur=null, live=[], AHEAD=2, BEHIND=1;
+  var feed=document.getElementById("feed"), muted=false, unlocked=false, autoMuted=false, skipTap=0, likes={}, pool=[], total=0, lastId="", want=null, cur=null, live=[], AHEAD=2, BEHIND=1;
   var startEl=document.getElementById("start");
 
   try{want=new URLSearchParams(location.search).get("v")}catch(e){}
@@ -693,7 +693,7 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
     var yt=el("button","btn");yt.setAttribute("aria-label","Buka di YouTube");
     yt.innerHTML='<svg width="22" height="22" viewBox="0 0 24 24" fill="#fff"><path d="M21.6 7.2a2.5 2.5 0 0 0-1.8-1.8C18.2 5 12 5 12 5s-6.2 0-7.8.4A2.5 2.5 0 0 0 2.4 7.2C2 8.8 2 12 2 12s0 3.2.4 4.8a2.5 2.5 0 0 0 1.8 1.8C5.8 19 12 19 12 19s6.2 0 7.8-.4a2.5 2.5 0 0 0 1.8-1.8c.4-1.6.4-4.8.4-4.8s0-3.2-.4-4.8zM10 15V9l5.2 3z"/></svg>';
     yt.onclick=function(){window.open("https://www.youtube.com/shorts/"+id,"_blank","noopener")};
-    side.appendChild(like);side.appendChild(snd);side.appendChild(sh);side.appendChild(yt);
+    side.appendChild(sh);side.appendChild(yt);
 
     r.appendChild(poster);r.appendChild(host);r.appendChild(msg);r.appendChild(tap);
     r.appendChild(el("div","pp","▶"));r.appendChild(tipL);r.appendChild(tipR);r.appendChild(side);r.appendChild(seek);
