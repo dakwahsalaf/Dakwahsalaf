@@ -1179,14 +1179,37 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
     var pl=watch.querySelector(".pl"),f=document.createElement("iframe"),wc=watch.querySelector(".wc");pl.innerHTML="";
     addHist({id:v.id,t:v.rt||v.t,c:v.c,ch:v.ch,d:v.d,th:v.th,s:short});
     pl.className="pl"+(short?" v":"");
-    f.src="https://www.youtube-nocookie.com/embed/"+v.id+"?autoplay=1&playsinline=1&rel=0"+(list?"&list="+encodeURIComponent(list):"")+(/^https?:$/.test(location.protocol)?"&origin="+encodeURIComponent(location.origin):"");
+    f.src="https://www.youtube-nocookie.com/embed/"+v.id+"?autoplay=1&playsinline=1&rel=0&enablejsapi=1"+(list?"&list="+encodeURIComponent(list):"")+(/^https?:$/.test(location.protocol)?"&origin="+encodeURIComponent(location.origin):"");
     f.allow="autoplay; encrypted-media; fullscreen";f.allowFullscreen=true;pl.appendChild(f);
     watch.querySelector(".wt").textContent=v.t;wc.textContent=v.c;
     wc.className="wc"+(v.ch?" lk":"");wc.onclick=v.ch?function(){closeWatch();openChannel(v.ch)}:null;
     watch.querySelector(".wy").onclick=function(){window.open(short?"https://www.youtube.com/shorts/"+v.id:"https://www.youtube.com/watch?v="+v.id,"_blank","noopener")};
     watch.classList.add("open");
+    bgSet(v,f,short);
   }
-  function closeWatch(){var was=watch.classList.contains("open");watch.classList.remove("open");watch.querySelector(".pl").innerHTML="";if(was&&tab==="history")renderHist()}
+  /* ---------- Putar di latar belakang / layar mati ---------- */
+  var bgF=null,bgOn=false,bgPaused=false,bgTm=0;
+  function bgCmd(fn){try{if(bgF&&bgF.contentWindow)bgF.contentWindow.postMessage(JSON.stringify({event:"command",func:fn,args:[]}),"*")}catch(e){}}
+  function bgSet(v,f,short){
+    bgF=f;bgOn=true;bgPaused=false;
+    if(!("mediaSession" in navigator))return;
+    try{
+      navigator.mediaSession.metadata=new MediaMetadata({title:v.rt||v.t||"Video",artist:v.c||"",album:"Dakwah Salaf",artwork:[{src:"https://i.ytimg.com/vi/"+v.id+"/hqdefault.jpg",sizes:"480x360",type:"image/jpeg"}]});
+      navigator.mediaSession.playbackState="playing";
+      navigator.mediaSession.setActionHandler("play",function(){bgPaused=false;bgCmd("playVideo");navigator.mediaSession.playbackState="playing"});
+      navigator.mediaSession.setActionHandler("pause",function(){bgPaused=true;bgCmd("pauseVideo");navigator.mediaSession.playbackState="paused"});
+      navigator.mediaSession.setActionHandler("seekbackward",null);navigator.mediaSession.setActionHandler("seekforward",null);
+    }catch(e){}
+  }
+  // Saat layar mati / app ke latar: minta pemutar lanjut (bila sistem mengizinkan), dicoba beberapa kali
+  function bgResume(){
+    clearInterval(bgTm);if(!bgOn||bgPaused||!watch.classList.contains("open"))return;
+    var n=0;bgCmd("playVideo");
+    bgTm=setInterval(function(){if(++n>6||!document.hidden||bgPaused){clearInterval(bgTm);return}bgCmd("playVideo")},1200);
+  }
+  document.addEventListener("visibilitychange",function(){if(document.hidden)bgResume()});
+  window.addEventListener("pagehide",bgResume);
+  function closeWatch(){bgOn=false;bgF=null;try{if("mediaSession" in navigator){navigator.mediaSession.playbackState="none";navigator.mediaSession.metadata=null}}catch(e){}var was=watch.classList.contains("open");watch.classList.remove("open");watch.querySelector(".pl").innerHTML="";if(was&&tab==="history")renderHist()}
   watch.querySelector(".wx").onclick=closeWatch;
   /* ---------- Peta di dalam app ---------- */
   var mapv=document.getElementById("mapv");
