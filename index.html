@@ -212,6 +212,8 @@ body.h .top{background:#000}
 </nav>
 
 <script>
+// URL asli saat halaman dibuka (sebelum ?v= dihapus oleh replaceState), dipakai untuk pindah ke Chrome
+var ORIG_URL=location.href;
 /* ===== PENGATURAN ===== */
 // Daftar channel YouTube (video short dari semua channel digabung dan diacak). Boleh berupa:
 //   "https://www.youtube.com/@namachannel"
@@ -1481,7 +1483,7 @@ window.addEventListener("appinstalled",function(){ib.style.display="none"});
   var ua=navigator.userAgent||"",b=document.getElementById("igb");
   if(!b||!/Instagram|FBAN|FBAV|FB_IAB/i.test(ua))return;
   try{if(sessionStorage.getItem("igb")==="x")return}catch(e){}
-  var url=location.href;
+  var url=ORIG_URL||location.href;
   b.classList.add("show");
   document.getElementById("igx").onclick=function(){b.classList.remove("show");try{sessionStorage.setItem("igb","x")}catch(e){}};
   document.getElementById("igc").onclick=function(){
