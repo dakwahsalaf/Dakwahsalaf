@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Install Dakwah Salaf</title>
+<meta name="theme-color" content="#0C1210">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{background:#0C1210;color:#fff;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px}
+#go{width:min(100%,360px);height:64px;border:0;border-radius:32px;background:#2FCB73;color:#0C1210;font:inherit;font-size:20px;font-weight:700;cursor:pointer}
+#go:active{transform:scale(.98)}
+#hint{max-width:360px;min-height:22px;text-align:center;font-size:14px;line-height:1.5;color:#C3CBC8}
+</style>
+</head>
+<body>
+<button id="go" type="button">Install segera</button>
+<p id="hint" role="status"></p>
+<script>
+(function(){
+  var ua=navigator.userAgent||"",btn=document.getElementById("go"),hint=document.getElementById("hint"),dip=null;
+  var inApp=/Instagram|FBAN|FBAV|FB_IAB/i.test(ua);
+  var isAndroid=/Android/i.test(ua),isIOS=/iPhone|iPad|iPod/i.test(ua);
+  var standalone=(window.matchMedia&&matchMedia("(display-mode: standalone)").matches)||navigator.standalone===true;
+
+  if("serviceWorker" in navigator){
+    window.addEventListener("load",function(){navigator.serviceWorker.register("sw.js").catch(function(){})});
+  }
+  window.addEventListener("beforeinstallprompt",function(e){e.preventDefault();dip=e});
+  window.addEventListener("appinstalled",function(){
+    dip=null;standalone=true;
+    btn.textContent="Buka aplikasi";
+    hint.textContent="Aplikasi sudah terpasang.";
+  });
+
+  if(standalone)btn.textContent="Buka aplikasi";
+
+  // Keluar dari browser Instagram lalu buka halaman ini di Chrome
+  function openChrome(){
+    var href=location.href;
+    if(isAndroid){
+      var u=new URL(href);
+      location.href="intent://"+u.host+u.pathname+u.search+u.hash+"#Intent;scheme="+u.protocol.replace(":","")+";package=com.android.chrome;end";
+    }else{
+      location.href="googlechrome://"+href.replace(/^https?:\/\//,"");
+    }
+  }
+
+  btn.addEventListener("click",function(){
+    if(standalone){location.href="./";return}
+    if(inApp){
+      openChrome();
+      setTimeout(function(){hint.textContent="Jika Chrome tidak terbuka, ketuk titik tiga di pojok layar lalu pilih Buka di browser."},1800);
+      return;
+    }
+    if(dip){
+      var p=dip;dip=null;
+      p.prompt();
+      p.userChoice.then(function(c){
+        hint.textContent=c&&c.outcome==="accepted"?"Sedang memasang aplikasi...":"Pemasangan dibatalkan. Ketuk lagi untuk mencoba.";
+      });
+      return;
+    }
+    hint.textContent=isIOS
+      ?"Ketuk tombol Bagikan, lalu pilih Tambah ke Layar Utama."
+      :"Buka menu titik tiga di Chrome, lalu pilih Instal aplikasi atau Tambahkan ke layar utama.";
+  });
+})();
+</script>
+</body>
+</html>
