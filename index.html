@@ -195,10 +195,13 @@ var YT_GROUPS = [
     "https://www.youtube.com/@ustadzabdullahzaen",
     "https://www.youtube.com/@ashiiltv",
     "https://www.youtube.com/@shahihfiqih",
-    "https://www.youtube.com/@erjetv"
+    "https://www.youtube.com/@erjetv",
+    "https://www.youtube.com/@amminurbaits"
   ]},
   {n:"Arab Saudi", c:[
-    "https://www.youtube.com/@fawaidalqasim"
+    "https://www.youtube.com/@fawaidalqasim",
+    "https://www.youtube.com/@tilawatalharamain1",
+    "https://www.youtube.com/@saudiqurantv"
   ]}
 ];
 // Tab "Lainnya": channel masjid dan sekolah (belum ikut di Beranda/Short, hanya muncul di tab Lainnya).
@@ -617,6 +620,17 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
     return Promise.all(jobs).then(function(){out.sort(function(a,b){return ids.indexOf(a.id)-ids.indexOf(b.id)});return out});
   }
   function plIds(pl,n){return api("playlistItems",{part:"contentDetails",maxResults:n,playlistId:pl}).then(function(d){return(d.items||[]).map(function(x){return x.contentDetails.videoId})})}
+  function plAll(pl){ // semua video dalam playlist, tanpa batas 200
+    var ids=[];
+    function page(tok){
+      var q={part:"contentDetails",maxResults:50,playlistId:pl};if(tok)q.pageToken=tok;
+      return api("playlistItems",q).then(function(d){
+        (d.items||[]).forEach(function(it){ids.push(it.contentDetails.videoId)});
+        return d.nextPageToken&&ids.length<5000?page(d.nextPageToken):ids;
+      });
+    }
+    return page("");
+  }
   function nf(n){n=+n||0;return n>=1e6?(n/1e6).toFixed(1).replace(".0","")+" jt":n>=1e3?(n/1e3).toFixed(1).replace(".0","")+" rb":""+n}
   function cch(k,fn){var c=load(k,null);if(c&&Date.now()-c.t<TTL)return Promise.resolve(c.x);return fn().then(function(x){save(k,{t:Date.now(),x:x});return x}).catch(function(){return c?c.x:[]})}
   function chInfo(ch){
@@ -952,7 +966,7 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
     sb.onclick=function(){window.open("https://www.youtube.com/channel/"+i.id+"?sub_confirmation=1","_blank","noopener")};t.appendChild(sb);
     h.appendChild(avatar(i,i.n));h.appendChild(t);chp.appendChild(h);
     var ct=el("div","ct"),body=el("div"),bs=[];
-    [["v","Video"],["s","Shorts"],["l","Live"],["p","Playlist"],["t","Tentang"]].forEach(function(a){
+    [["v","Video"],["s","Shorts"],["l","Live"],["p","Playlist"],["c","Podcast"],["t","Tentang"]].forEach(function(a){
       var b=el("button",a[0]===cTab?"on":null,a[1]);
       b.onclick=function(){cTab=a[0];bs.forEach(function(y){y.classList.toggle("on",y===b)});showTab(i,body)};bs.push(b);ct.appendChild(b);
     });
@@ -962,6 +976,7 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
     body.innerHTML="";var tk=cTab;
     if(tk==="t"){body.appendChild(el("div","ab",(i.d||"Belum ada deskripsi.")+"\n\nBergabung: "+new Date(i.j).toLocaleDateString("id-ID",{day:"numeric",month:"long",year:"numeric"})));return}
     if(tk==="p"){plTab(i,body);return}
+    if(tk==="c"){plTab(i,body,1);return}
     body.appendChild(el("div","ab","Memuat…"));
     chList(i,tk).then(function(a){
       if(tk!==cTab)return;body.innerHTML="";
@@ -988,20 +1003,29 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
       body.appendChild(so);body.appendChild(host);draw();
     });
   }
-  function plTab(i,body){
+  function plTab(i,body,pod){
     body.innerHTML="";body.appendChild(el("div","ab","Memuat…"));
-    cch(HV+"q"+i.id,function(){return api("playlists",{part:"snippet,contentDetails",channelId:i.id,maxResults:50}).then(function(d){
-      return(d.items||[]).map(function(p){var t=p.snippet.thumbnails||{};return{id:p.id,t:p.snippet.title,n:p.contentDetails.itemCount,p:p.snippet.publishedAt||"",th:(t.medium||t.default||{}).url||""}});
-    })}).then(function(a){
-      if(cTab!=="p")return;body.innerHTML="";
-      if(!a.length){body.appendChild(el("div","ab","Belum ada playlist."));return}
+    cch(HV+"q3"+i.id,function(){
+      var out=[];
+      function page(tok){
+        var q={part:"snippet,contentDetails,status",channelId:i.id,maxResults:50};if(tok)q.pageToken=tok;
+        return api("playlists",q).then(function(d){
+          (d.items||[]).forEach(function(p){var t=p.snippet.thumbnails||{};out.push({id:p.id,t:p.snippet.title,n:p.contentDetails.itemCount,p:p.snippet.publishedAt||"",th:(t.medium||t.default||{}).url||"",pc:!!(p.status&&p.status.podcastStatus==="enabled")})});
+          return d.nextPageToken&&out.length<2000?page(d.nextPageToken):out;
+        });
+      }
+      return page("");
+    }).then(function(a){
+      if(cTab!==(pod?"c":"p"))return;body.innerHTML="";
+      if(pod)a=a.filter(function(x){return x.pc});
+      if(!a.length){body.appendChild(el("div","ab",pod?"Belum ada podcast.":"Belum ada playlist."));return}
       var so=el("div","so"),g=el("div","grid"),sk="n";
       function draw(){
         g.innerHTML="";
         a.slice().sort(function(x,y){return sk==="o"?new Date(x.p)-new Date(y.p):new Date(y.p)-new Date(x.p)}).forEach(function(p){
           var b=el("div","vc"),th=el("div","th"),inf=el("div","in");b.setAttribute("role","button");
           if(p.th)th.style.backgroundImage="url("+p.th+")";th.appendChild(el("span","du",p.n+" video"));
-          inf.appendChild(el("div","ti",p.t));b.appendChild(th);b.appendChild(inf);b.onclick=function(){plView(i,p,body)};g.appendChild(b);
+          inf.appendChild(el("div","ti",p.t));b.appendChild(th);b.appendChild(inf);b.onclick=function(){plView(i,p,body,pod)};g.appendChild(b);
         });
       }
       [["n","Terbaru"],["o","Terlama"]].forEach(function(x){
@@ -1011,12 +1035,12 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
       body.appendChild(so);body.appendChild(g);draw();
     });
   }
-  function plView(i,p,body){
+  function plView(i,p,body,pod){
     body.innerHTML="";
     var so=el("div","so"),bk=el("button",null,"← Playlist"),pa=el("button","on","Putar semua"),host=el("div","pg");
     var so2=el("div","so"),sk="u",items=[];
     so.appendChild(bk);so.appendChild(pa);body.appendChild(so);body.appendChild(so2);body.appendChild(host);host.appendChild(el("div","ab","Memuat…"));
-    bk.onclick=function(){plTab(i,body)};
+    bk.onclick=function(){plTab(i,body,pod)};
     function draw(){
       host.innerHTML="";
       var b=items.slice();
@@ -1033,7 +1057,7 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
       var bt=el("button",x[0]===sk?"on":null,x[1]);
       bt.onclick=function(){sk=x[0];[].forEach.call(so2.children,function(y){y.classList.toggle("on",y===bt)});if(items.length)draw()};so2.appendChild(bt);
     });
-    cch(HV+"pl"+p.id,function(){return plIds(p.id,50).then(details)}).then(function(a){
+    cch(HV+"pl3"+p.id,function(){return plAll(p.id).then(details)}).then(function(a){
       host.innerHTML="";if(!a.length){host.appendChild(el("div","ab","Playlist kosong."));return}
       items=a;
       pa.onclick=function(){openWatch({id:a[0].id,t:p.t,rt:a[0].t,c:i.n,ch:curCh,d:a[0].d,th:a[0].th},p.id)};
