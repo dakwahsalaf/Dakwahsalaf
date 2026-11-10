@@ -30,11 +30,12 @@ html,body{height:100%;background:var(--bg);color:var(--fg);font-family:system-ui
 #feed.away{visibility:hidden;pointer-events:none;position:fixed;left:-200vw;top:0;width:100vw}
 .reel{position:relative;height:100%;scroll-snap-align:start;scroll-snap-stop:always;background:#000;overflow:hidden;contain:layout paint}
 .btn.q{font-size:12px;font-weight:700}
-.poster{position:absolute;inset:0;background:#000 center/cover no-repeat;transition:opacity .25s}
+.poster{position:absolute;inset:0;background:#000 center/cover no-repeat;transition:opacity .25s;z-index:1;pointer-events:none}
 .reel.playing .poster{opacity:0}
+.reel.fb .poster{display:none}
 .yt{position:absolute;inset:0}
 .yt iframe{width:100%;height:100%;border:0;pointer-events:none;background:#000}
-.tap{position:absolute;inset:0;z-index:1}
+.tap{position:absolute;inset:0;z-index:2}
 .reel.fb .tap,.reel.fb .seek,.reel.fb .pp{display:none}
 .reel.fb .yt iframe{pointer-events:auto}
 .side{position:absolute;right:10px;bottom:84px;display:flex;flex-direction:column;gap:18px;align-items:center;z-index:4}
@@ -469,7 +470,13 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
         if(st===3&&n++<6){check();return}
         if(st!==3&&n++<3){cmd(r,"playVideo");check();return}
         if(!unlocked){startEl.classList.add("show")}
-        else{muted=true;setSound();applySound(r);cmd(r,"playVideo")}
+        else if(!r._mt){ // coba sekali lagi dalam keadaan bisu
+          r._mt=1;muted=true;setSound();applySound(r);cmd(r,"playVideo");n=0;check();
+        }else{
+          // tetap diblokir (WebView/in-app browser): jangan biarkan macet diam-diam,
+          // tampilkan ikon ▶ supaya jelas cukup ketuk layar untuk memutar
+          r.classList.add("paused");
+        }
       },(n===0&&r._ready&&!r._fb)?250:700);
     })();
   }
@@ -479,6 +486,7 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
       if(!cur||cur.r!==r||r._userPaused||r._st===1||r._fb||tab!=="short")return;
       if(!r._hs){fallback(r);return} // pemutar tidak membalas sama sekali → iframe polos (autoplay)
       if(!unlocked)startEl.classList.add("show");
+      else r.classList.add("paused"); // sudah pernah dibuka kuncinya tapi tetap tidak jalan → ajak ketuk
     },6000);
   }
   function fallback(r){
@@ -491,7 +499,7 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
     r._fb=false;r.classList.remove("fb","playing","paused");
     var h=r.querySelector(".yt");if(h)h.innerHTML="";
     r._f=null;live=live.filter(function(x){return x!==r});
-    r._ready=false;r._played=false;r._st=-1;r._hs=0;r._userPaused=false;
+    r._ready=false;r._played=false;r._st=-1;r._hs=0;r._userPaused=false;r._mt=0;
     var m=r.querySelector(".msg");if(m)m.style.display="none";
   }
   function pauseReel(r){ // tidak dihancurkan: tetap siap supaya kalau kembali langsung tampil
