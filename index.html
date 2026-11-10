@@ -227,6 +227,7 @@ body.h .top{background:#000}
   <button data-t="oth"><svg viewBox="0 0 24 24"><path d="M5 10.5A1.5 1.5 0 1 0 5 13.5 1.5 1.5 0 0 0 5 10.5zm7 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm7 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z"/></svg>Lainnya</button>
 </nav>
 
+<script src="blokir.js"></script>
 <script>
 // URL asli saat halaman dibuka (sebelum ?v= dihapus oleh replaceState), dipakai untuk pindah ke Chrome
 var ORIG_URL=location.href;
@@ -302,6 +303,15 @@ var SPOTIFY_EPISODES = {
 };
 
 var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
+
+// Video yang disembunyikan dari app: daftarnya ada di file terpisah "blokir.js" (satu link per baris).
+var BLOCKED_IDS = {};
+if(typeof BLOKIR_TEKS==="string")BLOKIR_TEKS.split(/\r?\n/).forEach(function(l){
+  l=l.trim();if(!l||l.charAt(0)==="#")return;
+  var m=l.match(/(?:v=|youtu\.be\/|shorts\/|live\/|embed\/)([\w-]{11})/)||l.match(/^([\w-]{11})$/);
+  if(m)BLOCKED_IDS[m[1]]=1;
+});
+function isBlocked(id){return !!BLOCKED_IDS[id]}
 /* ======================= */
 
 (function(){
@@ -310,7 +320,7 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
   var startEl=document.getElementById("start");
 
   try{want=new URLSearchParams(location.search).get("v")}catch(e){}
-  var tab=want?"short":"home";
+  var tab="home"; // link ?v= selalu dibuka lewat layar tonton di atas Beranda (tab Short menutup layar tonton)
   function load(k,d){try{var v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}}
   function save(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
   function el(t,c,x){var n=document.createElement(t);if(c)n.className=c;if(x!=null)n.textContent=x;return n}
@@ -737,7 +747,7 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
           out.push({id:v.id,t:s.title,c:s.channelTitle,p:s.publishedAt,d:secs(v.contentDetails.duration),th:(t.maxres||t.medium||t.default||{}).url||"",lb:s.liveBroadcastContent||"none",rec:!!(ld&&ld.actualEndTime),vw:+((v.statistics||{}).viewCount)||0,x:((s.tags||[]).join(" ")+" "+(s.description||"").slice(0,400))})});
       }));
     })(ids.slice(i,i+50));
-    return Promise.all(jobs).then(function(){out.sort(function(a,b){return ids.indexOf(a.id)-ids.indexOf(b.id)});return out});
+    return Promise.all(jobs).then(function(){out=out.filter(function(v){return!isBlocked(v.id)});out.sort(function(a,b){return ids.indexOf(a.id)-ids.indexOf(b.id)});return out});
   }
   function plIds(pl,n){return api("playlistItems",{part:"contentDetails",maxResults:n,playlistId:pl}).then(function(d){return(d.items||[]).map(function(x){return x.contentDetails.videoId})})}
   function plAll(pl){ // semua video dalam playlist, tanpa batas 200
@@ -784,7 +794,7 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
   function homeMsg(h,t){home.innerHTML="";var e=el("div","empty");e.appendChild(el("h2",null,h));if(t)e.appendChild(el("p",null,t));home.appendChild(e)}
   function avatar(i,name){var a=el("div","av",i&&i.a?"":(name||"?").charAt(0).toUpperCase());if(i&&i.a)a.style.backgroundImage="url("+i.a+")";return a}
   function card(v,av){
-    var b=el("div","vc"),th=el("div","th"),inf=el("div","in"),me=el("div","me");b.setAttribute("role","button");
+    var b=el("div","vc"),th=el("div","th"),inf=el("div","in"),me=el("div","me");b.setAttribute("role","button");if(isBlocked(v.id))b.style.display="none";
     if(v.th)th.style.backgroundImage="url("+v.th+")";
     if(v.lb==="live")th.appendChild(el("span","lv","LIVE"));
     else if(v.lb==="upcoming")th.appendChild(el("span","lv r","Akan tayang"));
@@ -818,7 +828,7 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
         return api("playlistItems",q).then(function(d){
           (d.items||[]).forEach(function(it){
             var sn=it.snippet||{},id=(it.contentDetails||{}).videoId;
-            if(!id||sn.title==="Private video"||sn.title==="Deleted video")return;
+            if(!id||isBlocked(id)||sn.title==="Private video"||sn.title==="Deleted video")return;
             out.push({id:id,t:sn.title,c:name,ch:ch,p:(it.contentDetails||{}).videoPublishedAt||sn.publishedAt,lb:"none",x:(sn.description||"").slice(0,120),th:"https://i.ytimg.com/vi/"+id+"/mqdefault.jpg"});
           });
           return d.nextPageToken&&out.length<5000?page(d.nextPageToken):out;
@@ -1523,6 +1533,7 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
     var q=new URLSearchParams(location.search),id=q.get("v"),st=parseInt(q.get("t"),10)||0;
     if(!id||!/^[\w-]{11}$/.test(id))return;
     want=null;try{history.replaceState(null,"",location.pathname)}catch(e){}
+    if(isBlocked(id)){var tt=document.getElementById("toast");if(tt){tt.textContent="Video ini tidak tersedia";tt.classList.add("show");setTimeout(function(){tt.classList.remove("show")},2500)}return}
     var fb={id:id,t:"Video dakwah",c:"",d:0,th:"https://i.ytimg.com/vi/"+id+"/mqdefault.jpg",st:st};
     (YT_API_KEY?details([id]):Promise.resolve([])).then(function(a){var v=a[0]||fb;v.st=st;openWatch(v,null,false)}).catch(function(){openWatch(fb,null,false)});
   })();
@@ -1532,9 +1543,9 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
     return;
   }
   fetchList(function(more){ // channel yang selesai belakangan: tambahkan ke pool
-    more.forEach(function(x){if(/^[\w-]{11}$/.test(x)&&pool.indexOf(x)<0)pool.push(x)});
+    more.forEach(function(x){if(/^[\w-]{11}$/.test(x)&&!isBlocked(x)&&pool.indexOf(x)<0)pool.push(x)});
   }).then(function(items){
-    pool=items.filter(function(x,i){return /^[\w-]{11}$/.test(x)&&items.indexOf(x)===i});
+    pool=items.filter(function(x,i){return /^[\w-]{11}$/.test(x)&&!isBlocked(x)&&items.indexOf(x)===i});
     if(!pool.length){showMsg("Video belum tersedia");return}
     feed.innerHTML="";
     // batch pertama kecil (20 video) supaya cepat dirender; batch berikutnya memuat pool lengkap dari semua channel
