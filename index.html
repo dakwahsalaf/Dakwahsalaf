@@ -195,8 +195,7 @@ var YT_GROUPS = [
     "https://www.youtube.com/@ustadzabdullahzaen",
     "https://www.youtube.com/@ashiiltv",
     "https://www.youtube.com/@shahihfiqih",
-    "https://www.youtube.com/@erjetv",
-    "https://www.youtube.com/@amminurbaits"
+    "https://www.youtube.com/@erjetv"
   ]},
   {n:"Arab Saudi", c:[
     "https://www.youtube.com/@fawaidalqasim",
@@ -966,7 +965,7 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
     sb.onclick=function(){window.open("https://www.youtube.com/channel/"+i.id+"?sub_confirmation=1","_blank","noopener")};t.appendChild(sb);
     h.appendChild(avatar(i,i.n));h.appendChild(t);chp.appendChild(h);
     var ct=el("div","ct"),body=el("div"),bs=[];
-    [["v","Video"],["s","Shorts"],["l","Live"],["p","Playlist"],["c","Podcast"],["t","Tentang"]].forEach(function(a){
+    [["v","Video"],["s","Shorts"],["l","Live"],["p","Playlist"],["t","Tentang"]].forEach(function(a){
       var b=el("button",a[0]===cTab?"on":null,a[1]);
       b.onclick=function(){cTab=a[0];bs.forEach(function(y){y.classList.toggle("on",y===b)});showTab(i,body)};bs.push(b);ct.appendChild(b);
     });
@@ -975,9 +974,7 @@ var MAX_VIDEOS = 200;  // batas jumlah short yang diambil
   function showTab(i,body){
     body.innerHTML="";var tk=cTab;
     if(tk==="t"){body.appendChild(el("div","ab",(i.d||"Belum ada deskripsi.")+"\n\nBergabung: "+new Date(i.j).toLocaleDateString("id-ID",{day:"numeric",month:"long",year:"numeric"})));return}
-    if(tk==="p"){plTab(i,body);return}
-    if(tk==="c"){plTab(i,body,1);return}
-    body.appendChild(el("div","ab","Memuat…"));
+    if(tk==="p"){plTab(i,body);return}    body.appendChild(el("div","ab","Memuat…"));
     chList(i,tk).then(function(a){
       if(tk!==cTab)return;body.innerHTML="";
       if(!a.length){body.appendChild(el("div","ab",tk==="l"?"Belum ada live.":"Belum ada video."));return}
