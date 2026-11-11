@@ -29,7 +29,7 @@ html,body{height:100%;background:var(--bg);color:var(--fg);font-family:system-ui
 #feed{height:calc(100% - 56px - env(safe-area-inset-bottom,0px));overflow-y:scroll;scroll-snap-type:y mandatory;overscroll-behavior:contain;scrollbar-width:none}
 #feed::-webkit-scrollbar{display:none}
 #feed.away{visibility:hidden;pointer-events:none;position:fixed;left:-200vw;top:0;width:100vw}
-.reel{position:relative;height:100%;scroll-snap-align:start;background:#000;overflow:hidden;contain:layout paint}
+.reel{position:relative;height:100%;transform:translateZ(0);scroll-snap-align:start;background:#000;overflow:hidden;contain:layout paint}
 .btn.q{font-size:12px;font-weight:700}
 .poster{position:absolute;inset:0;background:#000 center/cover no-repeat;transition:opacity .08s;z-index:1;pointer-events:none}
 .reel.playing .poster{opacity:0}
@@ -40,11 +40,11 @@ html,body{height:100%;background:var(--bg);color:var(--fg);font-family:system-ui
 .reel.fb .tap,.reel.fb .seek,.reel.fb .pp{display:none}
 .reel.fb .yt iframe{pointer-events:auto}
 .side{position:absolute;right:10px;bottom:84px;display:flex;flex-direction:column;gap:18px;align-items:center;z-index:4}
-.btn{width:46px;height:46px;border-radius:50%;border:0;background:rgba(0,0,0,.45);color:#fff;font-size:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;backdrop-filter:blur(6px)}
+.btn{width:46px;height:46px;border-radius:50%;border:0;background:rgba(0,0,0,.45);color:#fff;font-size:20px;display:flex;align-items:center;justify-content:center;cursor:pointer}
 .btn.on{color:#ff5a6e}
 .side{gap:14px}
-.side .btn{color:rgba(255,255,255,.7);width:40px;height:40px;font-size:18px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.16);-webkit-backdrop-filter:blur(8px) saturate(140%);backdrop-filter:blur(8px) saturate(140%);box-shadow:0 2px 10px rgba(0,0,0,.15)}
-.side .btn svg{width:19px;height:19px;opacity:.65;transition:opacity .15s;filter:drop-shadow(0 1px 2px rgba(0,0,0,.45))}
+.side .btn{color:rgba(255,255,255,.7);width:40px;height:40px;font-size:18px;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.16)}
+.side .btn svg{width:19px;height:19px;opacity:.65;transition:opacity .15s}
 .side .btn:active svg{opacity:1}
 .side .btn.chb{width:32px;height:32px;padding:0;overflow:hidden}
 .side .btn.chb .av{width:22px;height:22px;font-size:11px;opacity:.7;pointer-events:none}
@@ -329,7 +329,7 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
 
 (function(){
   var CACHE="dakwah_yt_cache_v2", TTL=30*60*1000, LIKE="dakwah_likes_v2";
-  var feed=document.getElementById("feed"), muted=false, unlocked=false, autoMuted=false, skipTap=0, likes={}, pool=[], total=0, lastId="", want=null, cur=null, live=[], AHEAD=3, BEHIND=1;
+  var feed=document.getElementById("feed"), muted=false, unlocked=false, autoMuted=false, skipTap=0, likes={}, pool=[], total=0, lastId="", want=null, cur=null, live=[], AHEAD=2, BEHIND=1;
   var startEl=document.getElementById("start");
 
   try{want=new URLSearchParams(location.search).get("v")}catch(e){}
@@ -509,7 +509,7 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
     if((d.event==="onReady"||d.event==="initialDelivery")&&!r._ready){
       r._ready=true;clearInterval(r._li);
       if(cur&&cur.r===r){applySound(r);if(!r._userPaused&&!r._fb&&tab==="short"){cmd(r,"playVideo");verify(r)}}
-      else{cmd(r,"mute");if(!cur||Math.abs(+r.dataset.i-(+cur.r.dataset.i))<=2){r._pre=1;cmd(r,"playVideo")}} // pemanasan: putar bisu sebentar supaya data terisi, lalu dijeda oleh setState
+      else{cmd(r,"mute");if(!cur||Math.abs(+r.dataset.i-(+cur.r.dataset.i))<=1){r._pre=1;cmd(r,"playVideo")}} // pemanasan: putar bisu sebentar supaya data terisi, lalu dijeda oleh setState
     }
     if(d.event==="onError"){
       if(cur&&cur.r===r){
@@ -597,10 +597,15 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
         if(x._f||!cur)return;
         var d=+x.dataset.i-(+cur.r.dataset.i);
         if(d>=-BEHIND&&d<=AHEAD)build(x,false);
-      },k*40);
+      },350+k*200);
     });
     // pemanasan dua video berikutnya yang sudah siap (hanya yang terdekat, agar tidak berebut bandwidth dengan video aktif)
-    for(k=1;k<=2;k++){n=feed.children[i+k];if(n&&n.classList.contains("reel")&&n._ready&&!n._pre&&!n._fb){cmd(n,"mute");n._pre=1;cmd(n,"playVideo")}}
+    clearTimeout(preload._w);
+    preload._w=setTimeout(function(){
+      if(!cur||cur.r!==r)return;
+      var n1=feed.children[i+1];
+      if(n1&&n1.classList.contains("reel")&&n1._ready&&!n1._pre&&!n1._fb){cmd(n1,"mute");n1._pre=1;cmd(n1,"playVideo")}
+    },700);
   }
   function activate(r){
     if(cur&&cur.r===r)return;
@@ -634,6 +639,14 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
   feed.addEventListener("touchend",onGesture,true);
   setInterval(function(){snh.classList.toggle("show",!!(autoMuted&&tab==="short"&&cur&&cur.r._st===1))},400);
 
+  var pio=new IntersectionObserver(function(es){
+    es.forEach(function(e){
+      if(!e.isIntersecting)return;
+      var p=e.target.querySelector(".poster");
+      if(p&&p.dataset.s){p.style.backgroundImage="url("+p.dataset.s+")";p.dataset.s=""}
+      pio.unobserve(e.target);
+    });
+  },{root:feed,rootMargin:"150% 0px"});
   var pend=null;
   var io=new IntersectionObserver(function(es){
     es.forEach(function(e){
@@ -647,14 +660,14 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
   // Perbarui bilah progres video aktif
   function fmt(t){if(!isFinite(t)||t<0)t=0;var m=Math.floor(t/60),x=Math.floor(t%60);return m+":"+(x<10?"0":"")+x}
   setInterval(function(){
-    if(!cur||!cur.r._f||!cur.r._paint||cur.r._drag)return;
+    if(tab!=="short"||document.hidden||!cur||!cur.r._f||!cur.r._paint||cur.r._drag)return;
     cur.r._paint();
   },250);
 
   function addReel(id){
     var r=el("section","reel");
     r.dataset.i=total++;r.dataset.id=id;
-    var poster=el("div","poster");poster.style.backgroundImage="url(https://i.ytimg.com/vi/"+id+"/hqdefault.jpg)";
+    var poster=el("div","poster");poster.dataset.s="https://i.ytimg.com/vi/"+id+"/hqdefault.jpg";
     var host=el("div","yt"),tap=el("div","tap");
     var msg=el("div","msg","Video tidak dapat diputar.");
 
@@ -726,7 +739,7 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
 
     r.appendChild(poster);r.appendChild(host);r.appendChild(msg);r.appendChild(tap);
     r.appendChild(el("div","pp","▶"));r.appendChild(tipL);r.appendChild(tipR);r.appendChild(side);r.appendChild(seek);
-    feed.appendChild(r);io.observe(r);
+    feed.appendChild(r);io.observe(r);pio.observe(r);
   }
 
   /* ---------- Bagikan ---------- */
