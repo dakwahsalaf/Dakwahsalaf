@@ -1455,7 +1455,7 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
     var n=0;clearInterval(wLi);wLi=setInterval(function(){try{f.contentWindow.postMessage(JSON.stringify({event:"listening",id:1,channel:"widget"}),"*")}catch(e){}if(++n>8)clearInterval(wLi)},700);
   }
   /* ---------- Unduh thumbnail ---------- */
-  // Thumbnail Short dari YouTube berupa gambar 16:9/4:3 dengan bilah hitam di kiri-kanan. Buang bilah itu supaya hasilnya 9:16 seperti thumbnail asli.
+  // Thumbnail Short dari YouTube berupa gambar 16:9/4:3 dengan bilah hitam di kiri-kanan. Sisi kiri-kanan berisi latar blur/hitam: selalu dibuang, ambil hanya bagian tengah 9:16 seperti thumbnail asli.
   function cropShort(blob){
     return new Promise(function(ok){
       var u=URL.createObjectURL(blob),im=new Image();
@@ -1463,14 +1463,7 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
         try{
           var w=im.naturalWidth,h=im.naturalHeight,cw=Math.round(h*9/16);
           if(cw>=w-4){URL.revokeObjectURL(u);ok(blob);return}
-          var x0=Math.floor((w-cw)/2),c=document.createElement("canvas");c.width=w;c.height=h;
-          var g=c.getContext("2d");g.drawImage(im,0,0);
-          // pastikan bilah kiri-kanan memang hitam (bukan video horizontal)
-          var bw=Math.max(2,Math.floor(x0*0.8)),dark=0,tot=0,y,px,k;
-          [g.getImageData(0,0,bw,h).data,g.getImageData(w-bw,0,bw,h).data].forEach(function(d){
-            for(k=0;k<d.length;k+=4*7){tot++;if(d[k]<24&&d[k+1]<24&&d[k+2]<24)dark++}
-          });
-          if(!tot||dark/tot<0.97){URL.revokeObjectURL(u);ok(blob);return}
+          var x0=Math.round((w-cw)/2);
           var o=document.createElement("canvas");o.width=cw;o.height=h;
           o.getContext("2d").drawImage(im,x0,0,cw,h,0,0,cw,h);
           URL.revokeObjectURL(u);
