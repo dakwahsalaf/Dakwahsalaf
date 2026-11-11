@@ -8,5 +8,6 @@ var BLOKIR_TEKS = `
 # https://www.youtube.com/watch?v=XXXXXXXXXXX
 
 https://dakwahsalaf.github.io/Dakwahsalaf/?v=uLwBCVEVXzM
+https://dakwahsalaf.github.io/Dakwahsalaf/?v=8xKpoDN5Ggo
 
 `;
