@@ -42,6 +42,10 @@ html,body{height:100%;background:var(--bg);color:var(--fg);font-family:system-ui
 .side{position:absolute;right:10px;bottom:84px;display:flex;flex-direction:column;gap:18px;align-items:center;z-index:4}
 .btn{width:46px;height:46px;border-radius:50%;border:0;background:rgba(0,0,0,.45);color:#fff;font-size:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;backdrop-filter:blur(6px)}
 .btn.on{color:#ff5a6e}
+.side{gap:14px}
+.side .btn{color:rgba(255,255,255,.7);width:40px;height:40px;font-size:18px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.16);-webkit-backdrop-filter:blur(8px) saturate(140%);backdrop-filter:blur(8px) saturate(140%);box-shadow:0 2px 10px rgba(0,0,0,.15)}
+.side .btn svg{width:19px;height:19px;opacity:.65;transition:opacity .15s;filter:drop-shadow(0 1px 2px rgba(0,0,0,.45))}
+.side .btn:active svg{opacity:1}
 .seek{position:absolute;left:0;right:0;bottom:0;padding:0 14px 12px;touch-action:none;cursor:pointer;background:linear-gradient(transparent,rgba(0,0,0,.6));z-index:3}
 .time{display:flex;justify-content:space-between;font-size:13px;font-variant-numeric:tabular-nums;color:#fff;padding-bottom:10px;text-shadow:0 1px 3px rgba(0,0,0,.8)}
 .track{position:relative;height:4px;border-radius:2px;background:rgba(255,255,255,.3);transition:height .15s}
@@ -706,7 +710,8 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
     var yt=el("button","btn");yt.setAttribute("aria-label","Buka di YouTube");
     yt.innerHTML='<svg width="22" height="22" viewBox="0 0 24 24" fill="#fff"><path d="M21.6 7.2a2.5 2.5 0 0 0-1.8-1.8C18.2 5 12 5 12 5s-6.2 0-7.8.4A2.5 2.5 0 0 0 2.4 7.2C2 8.8 2 12 2 12s0 3.2.4 4.8a2.5 2.5 0 0 0 1.8 1.8C5.8 19 12 19 12 19s6.2 0 7.8-.4a2.5 2.5 0 0 0 1.8-1.8c.4-1.6.4-4.8.4-4.8s0-3.2-.4-4.8zM10 15V9l5.2 3z"/></svg>';
     yt.onclick=function(){window.open("https://www.youtube.com/shorts/"+id,"_blank","noopener")};
-    side.appendChild(sh);side.appendChild(yt);
+    var thb=el("button","btn");thb.setAttribute("aria-label","Unduh thumbnail");thb.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M21 16l-5-5-8 9"/></svg>';thb.onclick=function(e){e.stopPropagation();dlThumb({id:id},thb)};
+    side.appendChild(sh);side.appendChild(thb);side.appendChild(yt);
 
     r.appendChild(poster);r.appendChild(host);r.appendChild(msg);r.appendChild(tap);
     r.appendChild(el("div","pp","▶"));r.appendChild(tipL);r.appendChild(tipR);r.appendChild(side);r.appendChild(seek);
@@ -1399,17 +1404,17 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
   }
   /* ---------- Unduh thumbnail ---------- */
   function dlThumb(v,btn){
-    var names=["maxresdefault","sddefault","hqdefault"],i=0,lbl="🖼 Thumbnail";
+    var names=["maxresdefault","sddefault","hqdefault"],i=0,lbl=btn._lbl||(btn._lbl=btn.innerHTML),sm=btn.classList.contains("btn");
     function url(n){return"https://i.ytimg.com/vi/"+v.id+"/"+n+".jpg"}
-    function say(x){btn.textContent=x;setTimeout(function(){btn.textContent=lbl},2000)}
-    function fallback(){window.open(url("hqdefault"),"_blank","noopener");say("Tekan lama gambar → simpan")}
+    function say(x,y){btn.textContent=sm?y:x;setTimeout(function(){btn.innerHTML=lbl},2000)}
+    function fallback(){window.open(url("hqdefault"),"_blank","noopener");say("Tekan lama gambar → simpan","↗")}
     function next(){
       if(i>=names.length)return fallback();
-      btn.textContent="Mengunduh…";
+      btn.textContent=sm?"…":"Mengunduh…";
       fetch(url(names[i++])).then(function(r){if(!r.ok)throw 0;return r.blob()}).then(function(b){
         var a=document.createElement("a"),nm=String(v.rt||v.t||v.id).replace(/[\\/:*?"<>|]+/g," ").trim().slice(0,80)||v.id;
         a.href=URL.createObjectURL(b);a.download=nm+".jpg";document.body.appendChild(a);a.click();
-        setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},1000);say("Tersimpan ✓");
+        setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},1000);say("Tersimpan ✓","✓");
       }).catch(function(e){if(e instanceof TypeError)fallback();else next()});
     }
     next();
