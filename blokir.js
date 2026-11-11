@@ -12,3 +12,7 @@ https://dakwahsalaf.github.io/Dakwahsalaf/?v=8xKpoDN5Ggo
 https://dakwahsalaf.github.io/Dakwahsalaf/?v=F8LfzMmaZbA
 
 `;
+
+// TUJUAN LAPORAN: nomor WhatsApp tujuan dengan kode negara, tanpa tanda + (contoh: "6281234567890").
+// Kalau dikosongkan, tombol Laporkan membuka menu bagikan HP supaya Anda memilih sendiri aplikasi tujuannya.
+var LAPOR_WA = "6281377042387";

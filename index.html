@@ -130,7 +130,7 @@ body.h .top{background:#000}
 .so{display:flex;gap:6px;padding:10px 12px}
 .vc .rw .in{flex:1}.vc .rw .hx{flex:none;align-self:flex-start;width:32px;height:32px;border:0;border-radius:50%;background:none;color:var(--mut);font-size:16px;cursor:pointer}
 .gs{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(120px,30%),1fr));gap:8px 4px;padding:0 4px;max-width:1400px;margin:0 auto}
-.gs .vc .th{aspect-ratio:9/16}.gs .vc .ti{font-size:12.5px}.gs .vc .in{padding:6px 4px 0}
+.gs .vc .th{aspect-ratio:9/16}.gs .vc .ti{font-size:12.5px}.gs .vc .in{padding:6px 4px 0}.gs .vc .rw{padding:6px 0 0;gap:0}.gs .vc .rw .hx{width:24px;height:24px;font-size:14px}
 .pr{display:flex;gap:10px;padding:6px 12px;width:100%;background:none;border:0;color:inherit;font:inherit;text-align:left;cursor:pointer}
 .pr .th{position:relative;width:150px;aspect-ratio:16/9;flex:none;background:#222 center/cover no-repeat}
 .pr .du{position:absolute;right:6px;bottom:6px;background:rgba(0,0,0,.8);padding:2px 5px;border-radius:4px;font-size:12px;font-weight:600}
@@ -184,6 +184,8 @@ body.h .top{background:#000}
 .shs .gr{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
 .shs .gr button{border:0;background:#2a2a2a;color:#fff;border-radius:12px;padding:12px 4px;font-size:12px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px}
 .shs .gr b{font-size:20px;line-height:1}
+.shs .mi{display:flex;align-items:center;gap:14px;width:100%;background:none;border:0;color:#fff;font-size:15px;padding:13px 4px;cursor:pointer;text-align:left}.shs .mi b{font-size:20px;width:26px;text-align:center}
+.shs textarea{width:100%;box-sizing:border-box;background:#000;border:1px solid #333;color:#fff;border-radius:10px;padding:10px;font:inherit;font-size:13px;min-height:60px;margin:0 0 12px}
 .shs label{display:flex;gap:8px;align-items:center;font-size:13px;margin:0 0 12px}
 .shs .yl{background:#2a2a2a;color:#fff;margin-top:12px;width:100%}
 #snh{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(72px + env(safe-area-inset-bottom,0px));z-index:12;background:rgba(0,0,0,.7);color:#fff;font-size:13px;font-weight:600;padding:8px 14px;border-radius:18px;display:none;pointer-events:none;white-space:nowrap}
@@ -311,7 +313,10 @@ if(typeof BLOKIR_TEKS==="string")BLOKIR_TEKS.split(/\r?\n/).forEach(function(l){
   var m=l.match(/(?:v=|youtu\.be\/|shorts\/|live\/|embed\/)([\w-]{11})/)||l.match(/^([\w-]{11})$/);
   if(m)BLOCKED_IDS[m[1]]=1;
 });
-function isBlocked(id){return !!BLOCKED_IDS[id]}
+var LAPOR_IDS = {};
+try{JSON.parse(localStorage.getItem("dk_lapor")||"[]").forEach(function(i){LAPOR_IDS[i]=1})}catch(e){}
+function addLapor(id){LAPOR_IDS[id]=1;try{localStorage.setItem("dk_lapor",JSON.stringify(Object.keys(LAPOR_IDS)))}catch(e){}}
+function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
 /* ======================= */
 
 (function(){
@@ -803,10 +808,12 @@ function isBlocked(id){return !!BLOCKED_IDS[id]}
     inf.appendChild(el("div","ti",v.t));
     me.textContent=(av?v.c+" · ":"")+(v.lb==="live"?"Sedang live":v.lb==="upcoming"?"Segera":ago(v.p));inf.appendChild(me);
     b.appendChild(th);b.onclick=function(){openWatch(v)};
+    var r=el("div","rw"),mn=menuBtn(v,b);
     if(av){
-      var r=el("div","rw"),a=avatar(CI[v.ch],v.c),go=function(e){e.stopPropagation();openChannel(v.ch)};
-      a.onclick=go;me.onclick=go;r.appendChild(a);r.appendChild(inf);b.appendChild(r);
-    }else b.appendChild(inf);
+      var a=avatar(CI[v.ch],v.c),go=function(e){e.stopPropagation();openChannel(v.ch)};
+      a.onclick=go;me.onclick=go;r.appendChild(a);
+    }
+    r.appendChild(inf);r.appendChild(mn);b.appendChild(r);
     return b;
   }
   // Pencarian video di Beranda: cocokkan judul dan nama channel (dari video yang sudah dimuat, tanpa kuota API)
@@ -891,9 +898,48 @@ function isBlocked(id){return !!BLOCKED_IDS[id]}
     if(ch){var go=function(e){e.stopPropagation();openChannel(ch)};a.onclick=go;me.onclick=go}
     var x=el("button","hx","✕");x.setAttribute("aria-label","Hapus dari riwayat");
     x.onclick=function(e){e.stopPropagation();save(HK,load(HK,[]).filter(function(y){return y.id!==v.id}));renderHist()};
-    r.appendChild(a);r.appendChild(inf);r.appendChild(x);b.appendChild(th);b.appendChild(r);
+    r.appendChild(a);r.appendChild(inf);r.appendChild(menuBtn(v,b));r.appendChild(x);b.appendChild(th);b.appendChild(r);
     b.setAttribute("role","button");b.onclick=function(){openWatch({id:v.id,t:v.t||"Video",c:v.c,ch:ch,d:v.d,th:v.th},null,!!v.s)};
     return b;
+  }
+  /* ---------- Menu titik tiga & laporan ---------- */
+  function menuBtn(v,cardEl){
+    var m=el("button","hx","⋮");m.setAttribute("aria-label","Menu video");
+    m.onclick=function(e){e.stopPropagation();openMenu(v,cardEl)};return m;
+  }
+  function openMenu(v,cardEl){
+    var old=document.querySelector(".shov");if(old)old.remove();
+    var ov=el("div","shov"),sh=el("div","shs"),t=v.t||"Video";
+    function close(){ov.remove()}
+    function item(ic,txt,fn){var b=el("button","mi");b.appendChild(el("b",null,ic));b.appendChild(document.createTextNode(txt));b.onclick=fn;sh.appendChild(b)}
+    sh.appendChild(el("p","sn",t));
+    item("↗️","Bagikan",function(){close();var u=appLink(v.id,0);if(navigator.share)navigator.share({title:t,text:t,url:u}).catch(function(){});else{copyText(u);say("Tautan disalin")}});
+    item("🔗","Salin link",function(){close();copyText(appLink(v.id,0));say("Tautan disalin")});
+    item("▶️","Buka di YouTube",function(){close();window.open("https://www.youtube.com/watch?v="+v.id,"_blank","noopener")});
+    item("🚩","Laporkan",function(){close();openReport(v,cardEl)});
+    ov.appendChild(sh);ov.onclick=function(e){if(e.target===ov)close()};document.body.appendChild(ov);
+  }
+  function openReport(v,cardEl){
+    var ov=el("div","shov"),sh=el("div","shs"),t=v.t||"Video",checks=[];
+    function close(){ov.remove()}
+    sh.appendChild(el("h3",null,"Laporkan video"));sh.appendChild(el("p","sn",t));
+    ["Ada iklan","Ada musik","Aurat tidak tertutup"].forEach(function(n){
+      var lb=el("label"),c=el("input");c.type="checkbox";lb.appendChild(c);lb.appendChild(document.createTextNode(n));sh.appendChild(lb);checks.push([c,n]);
+    });
+    var note=el("textarea");note.placeholder="Catatan (opsional)";sh.appendChild(note);
+    var go=el("button","yl","Kirim laporan");go.style.cssText="background:var(--acc);color:#04210f;margin-top:0";
+    go.onclick=function(){
+      var why=checks.filter(function(c){return c[0].checked}).map(function(c){return c[1]}),nt=note.value.trim();
+      if(!why.length&&!nt){say("Pilih alasan laporan dulu");return}
+      var text="LAPORAN VIDEO\nJudul: "+t+"\nLink: https://www.youtube.com/watch?v="+v.id+"\nAlasan: "+(why.join(", ")||"-")+(nt?"\nCatatan: "+nt:"");
+      function done(){addLapor(v.id);if(cardEl)cardEl.style.display="none";histSig="";close();say("Laporan dibuat, video disembunyikan",2500)}
+      if(typeof LAPOR_WA==="string"&&LAPOR_WA){window.open("https://wa.me/"+LAPOR_WA.replace(/\D/g,"")+"?text="+encodeURIComponent(text),"_blank","noopener");done()}
+      else if(navigator.share)navigator.share({title:"Laporan video",text:text}).then(done).catch(function(){});
+      else{copyText(text);done()}
+    };
+    sh.appendChild(go);
+    var cn=el("button","yl","Batal");cn.onclick=close;sh.appendChild(cn);
+    ov.appendChild(sh);ov.onclick=function(e){if(e.target===ov)close()};document.body.appendChild(ov);
   }
   var histSig="";
   function renderHist(){
@@ -904,7 +950,7 @@ function isBlocked(id){return !!BLOCKED_IDS[id]}
     hist.appendChild(el("div","sec","Riwayat Tontonan"));
     var so=el("div","so"),cl=el("button",null,"Hapus semua");
     cl.onclick=function(){if(confirm("Hapus semua riwayat tontonan?")){save(HK,[]);renderHist()}};so.appendChild(cl);hist.appendChild(so);
-    var g=el("div","grid");a.forEach(function(v){g.appendChild(histCard(v))});hist.appendChild(g);
+    var g=el("div","grid");a.forEach(function(v){if(!isBlocked(v.id))g.appendChild(histCard(v))});hist.appendChild(g);
     var miss=a.filter(function(x){return!x.t}).map(function(x){return x.id}).slice(0,50);
     if(miss.length&&YT_API_KEY)details(miss).then(function(ds){
       var got={};ds.forEach(function(d){got[d.id]=d});
