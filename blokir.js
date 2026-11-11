@@ -9,5 +9,6 @@ var BLOKIR_TEKS = `
 
 https://dakwahsalaf.github.io/Dakwahsalaf/?v=uLwBCVEVXzM
 https://dakwahsalaf.github.io/Dakwahsalaf/?v=8xKpoDN5Ggo
+https://dakwahsalaf.github.io/Dakwahsalaf/?v=F8LfzMmaZbA
 
 `;
