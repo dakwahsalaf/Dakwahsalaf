@@ -29,9 +29,9 @@ html,body{height:100%;background:var(--bg);color:var(--fg);font-family:system-ui
 #feed{height:calc(100% - 56px - env(safe-area-inset-bottom,0px));overflow-y:scroll;scroll-snap-type:y mandatory;overscroll-behavior:contain;scrollbar-width:none}
 #feed::-webkit-scrollbar{display:none}
 #feed.away{visibility:hidden;pointer-events:none;position:fixed;left:-200vw;top:0;width:100vw}
-.reel{position:relative;height:100%;scroll-snap-align:start;scroll-snap-stop:always;background:#000;overflow:hidden;contain:layout paint}
+.reel{position:relative;height:100%;scroll-snap-align:start;background:#000;overflow:hidden;contain:layout paint}
 .btn.q{font-size:12px;font-weight:700}
-.poster{position:absolute;inset:0;background:#000 center/cover no-repeat;transition:opacity .25s;z-index:1;pointer-events:none}
+.poster{position:absolute;inset:0;background:#000 center/cover no-repeat;transition:opacity .08s;z-index:1;pointer-events:none}
 .reel.playing .poster{opacity:0}
 .reel.fb .poster{display:none}
 .yt{position:absolute;inset:0}
@@ -329,7 +329,7 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
 
 (function(){
   var CACHE="dakwah_yt_cache_v2", TTL=30*60*1000, LIKE="dakwah_likes_v2";
-  var feed=document.getElementById("feed"), muted=false, unlocked=false, autoMuted=false, skipTap=0, likes={}, pool=[], total=0, lastId="", want=null, cur=null, live=[], AHEAD=2, BEHIND=1;
+  var feed=document.getElementById("feed"), muted=false, unlocked=false, autoMuted=false, skipTap=0, likes={}, pool=[], total=0, lastId="", want=null, cur=null, live=[], AHEAD=3, BEHIND=1;
   var startEl=document.getElementById("start");
 
   try{want=new URLSearchParams(location.search).get("v")}catch(e){}
@@ -409,7 +409,7 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
   // Tunggu semua channel selesai, tetapi paling lama 2 detik (asal sudah ada channel yang berisi video),
   // supaya batch pertama sudah bercampur dari banyak channel. Channel yang menyusul langsung dimasukkan
   // ke pool lewat onMore, jadi ikut teracak di batch berikutnya.
-  var WAIT_MS=2000;
+  var WAIT_MS=600;
   function fetchList(onMore){
     return new Promise(function(resolve,reject){
       var chs=YT_API_KEY?YT_CHANNELS:[],all=EXTRA_IDS.slice(),done=0,got=0,first=false,late=false,timer=null;
@@ -507,8 +507,9 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
     r._hs=1;
     var info=d.info;
     if((d.event==="onReady"||d.event==="initialDelivery")&&!r._ready){
-      r._ready=true;clearInterval(r._li);applySound(r);
-      if(cur&&cur.r===r&&!r._userPaused&&!r._fb&&tab==="short"){cmd(r,"playVideo");verify(r)}
+      r._ready=true;clearInterval(r._li);
+      if(cur&&cur.r===r){applySound(r);if(!r._userPaused&&!r._fb&&tab==="short"){cmd(r,"playVideo");verify(r)}}
+      else{cmd(r,"mute");if(!cur||Math.abs(+r.dataset.i-(+cur.r.dataset.i))<=2){r._pre=1;cmd(r,"playVideo")}} // pemanasan: putar bisu sebentar supaya data terisi, lalu dijeda oleh setState
     }
     if(d.event==="onError"){
       if(cur&&cur.r===r){
@@ -542,7 +543,7 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
           // tampilkan ikon ▶ supaya jelas cukup ketuk layar untuk memutar
           r.classList.add("paused");
         }
-      },(n===0&&r._ready&&!r._fb)?250:700);
+      },(n===0&&r._ready&&!r._fb)?100:600);
     })();
   }
   function guard(r){
@@ -564,7 +565,7 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
     r._fb=false;r.classList.remove("fb","playing","paused");
     var h=r.querySelector(".yt");if(h)h.innerHTML="";
     r._f=null;live=live.filter(function(x){return x!==r});
-    r._ready=false;r._played=false;r._st=-1;r._hs=0;r._userPaused=false;r._mt=0;
+    r._ready=false;r._played=false;r._st=-1;r._hs=0;r._userPaused=false;r._mt=0;r._pre=0;
     var m=r.querySelector(".msg");if(m)m.style.display="none";
   }
   function pauseReel(r){ // tidak dihancurkan: tetap siap supaya kalau kembali langsung tampil
@@ -577,7 +578,7 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
     r._userPaused=false;r.classList.remove("paused");
     if(!r._f){build(r,true)}
     else if(r._ready&&!r._fb){
-      if(r._played)cmd(r,"seekTo",[0,true]);
+      if(r._played||r._pre){cmd(r,"seekTo",[0,true]);r._pre=0}
       applySound(r);cmd(r,"playVideo");
       verify(r);
     }
@@ -596,8 +597,10 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
         if(x._f||!cur)return;
         var d=+x.dataset.i-(+cur.r.dataset.i);
         if(d>=-BEHIND&&d<=AHEAD)build(x,false);
-      },k*60);
+      },k*40);
     });
+    // pemanasan dua video berikutnya yang sudah siap (hanya yang terdekat, agar tidak berebut bandwidth dengan video aktif)
+    for(k=1;k<=2;k++){n=feed.children[i+k];if(n&&n.classList.contains("reel")&&n._ready&&!n._pre&&!n._fb){cmd(n,"mute");n._pre=1;cmd(n,"playVideo")}}
   }
   function activate(r){
     if(cur&&cur.r===r)return;
@@ -634,12 +637,12 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
   var pend=null;
   var io=new IntersectionObserver(function(es){
     es.forEach(function(e){
-      if(e.isIntersecting&&e.intersectionRatio>=.6){
+      if(e.isIntersecting&&e.intersectionRatio>=.5){
         if(tab!=="short"){pend=e.target;return} // sedang di tab lain: simpan, aktifkan saat masuk Short
         activate(e.target);
       }
     });
-  },{root:feed,threshold:[.6]});
+  },{root:feed,threshold:[.5]});
 
   // Perbarui bilah progres video aktif
   function fmt(t){if(!isFinite(t)||t<0)t=0;var m=Math.floor(t/60),x=Math.floor(t%60);return m+":"+(x<10?"0":"")+x}
