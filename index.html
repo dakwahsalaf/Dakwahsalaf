@@ -1919,6 +1919,9 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
   }
   tabsEl.addEventListener("click",function(e){var b=e.target.closest("button");if(!b)return;if(b.dataset.t!==tab)setTab(b.dataset.t);else closeCh()});
   setTab(tab);loadHome();
+  // Link langsung ke tab: ?tab=short (juga home, channels, history, oth). Diabaikan jika ada ?v=
+  (function(){try{var q=new URLSearchParams(location.search),t=q.get("tab");
+    if(t&&!q.get("v")&&["home","short","channels","history","oth"].indexOf(t)>=0&&t!==tab)setTab(t)}catch(e){}})();
   (function(){
     var q=new URLSearchParams(location.search),id=q.get("v"),st=parseInt(q.get("t"),10)||0;
     if(!id||!/^[\w-]{11}$/.test(id))return;
