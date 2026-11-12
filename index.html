@@ -323,7 +323,7 @@ var YT_API_KEY = "AIzaSyC0c-m00EzB3UTVzifTbnLOHdX_dfcfkCE";
 // Contoh: "https://youtube.com/shorts/yk5HrF7n9Xs" -> ID-nya "yk5HrF7n9Xs"
 var EXTRA_IDS = ["yk5HrF7n9Xs"];
 
-// Spotify: isi bila channel punya podcast di Spotify. Tombol "Putar di Spotify" hanya muncul untuk channel yang diisi.
+// Spotify: tombol "Cari judul ini di Spotify" muncul di semua video (mencari judul video di Spotify). Isi daftar di bawah bila channel punya podcast di Spotify (opsional).
 // Kunci = handle channel (mis. "@amminurbaits") atau nama channel. Nilai = ID show Spotify (22 huruf/angka dari link
 // open.spotify.com/show/XXXXXXXXXXXXXXXXXXXXXX). Contoh:  "@amminurbaits": "4rOoJ6Egrf8K2IrywzwOMk",
 var SPOTIFY_SHOWS = {
@@ -1732,7 +1732,7 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
       var kk=key.toLowerCase();
       if(/^[A-Za-z0-9]{22}$/.test(SPOTIFY_SHOWS[key])&&((h&&h.indexOf(kk)>-1)||(n&&n===kk)))return{k:"show",id:SPOTIFY_SHOWS[key]};
     }
-    return null;
+    return{k:"search"}; // semua video lain: tombol tetap muncul, cari judulnya di Spotify
   }
   function openSpotify(v,sid){
     if(!sid)return;
