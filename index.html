@@ -184,6 +184,9 @@ body.h .top{background:#000}
 #mapv .wy{flex:none;border:0;border-radius:18px;padding:9px 14px;font-weight:700;font-size:13px;background:var(--acc);color:#04210f;cursor:pointer}
 #mapv .wz{flex:none;border:0;border-radius:18px;padding:9px 14px;font-weight:700;font-size:13px;background:rgba(255,255,255,.12);color:#fff;cursor:pointer}
 #mapv iframe{flex:1;width:100%;border:0;background:#222}
+#mapv.ld .bar::after{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;background:linear-gradient(90deg,transparent,var(--acc),transparent);background-size:40% 100%;background-repeat:no-repeat;animation:ldb 1s linear infinite}
+#mapv .bar{position:relative}
+@keyframes ldb{from{background-position:-40% 0}to{background-position:140% 0}}
 .gh1{max-width:1400px;margin:0 auto;padding:18px 12px 4px;font-size:26px;font-weight:800}
 .gh2{max-width:1400px;margin:0 auto;padding:8px 12px 2px;font-size:18px;font-weight:700;color:var(--acc)}
 .gh3{max-width:1400px;margin:0 auto;padding:4px 12px 4px;font-size:14px;font-weight:600;color:var(--mut)}
@@ -1310,16 +1313,12 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
   // Artikel & situs Islam (tab Lainnya > Artikel & Situs Islam). Tambah situs baru di sini: n = nama, d = keterangan singkat, u = alamat situs, i = alamat gambar ikon (opsional; jika kosong dipakai ikon situs, lalu huruf pertama).
   var ARTIKEL=[
     {n:"Maktabah asy-Syaamilah",d:"Perpustakaan kitab Arab",u:"https://shamela.ws"},
-    {n:"Bekal Islam",d:"Ustadz Firanda Andirja",u:"https://bekalislam.firanda.com"},
     {n:"TafsirWeb",d:"Tafsir Al-Qur'an",u:"https://tafsirweb.com"},
     {n:"Alqolam",d:"Artikel Islam",u:"https://alqolam.web.id"},
     {n:"Pengusaha Muslim",d:"Bisnis & muamalah",u:"https://pengusahamuslim.com"},
     {n:"At-Tabiin",d:"Artikel Islam",u:"https://www.attabiin.com"},
     {n:"Muslim.or.id",d:"Artikel Islam",u:"https://muslim.or.id"},
-    {n:"Almanhaj",d:"Artikel & fatwa ulama",u:"https://almanhaj.com"},
     {n:"Rumaysho",d:"Ustadz M. Abduh Tuasikal",u:"https://rumaysho.com"},
-    {n:"Asy-Syariah",d:"Artikel & majalah Islam",u:"https://asyasyariah.com"},
-    {n:"IslamQA",d:"Tanya jawab Islam",u:"https://islamqa.info/id"},
     {n:"Muslimah.or.id",d:"Artikel muslimah",u:"https://muslimah.or.id"},
     {n:"Al-Mubarok",d:"Artikel Islam",u:"https://al-mubarok.com"},
     {n:"Bimbingan Islam",d:"Kajian & artikel",u:"https://bimbinganislam.com"},
@@ -1331,15 +1330,35 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
     {n:"Wawasan Keislaman",d:"Blog artikel Islam",u:"https://wawasankeislaman.blogspot.com"},
     {n:"Remaja Islam",d:"Artikel untuk remaja",u:"https://remajaislam.com"},
     {n:"Yufid",d:"Kajian & artikel",u:"https://yufid.com"},
-    {n:"BBG Al-Ilmu",d:"Kajian & artikel",u:"https://bbgalilmu.com"},
-    {n:"Cinta Sunnah",d:"Artikel Islam",u:"https://cintasunnah.com"},
     {n:"Addariny",d:"Blog artikel Islam",u:"https://addariny.wordpress.com"},
     {n:"Kang Aswad",d:"Blog artikel Islam",u:"https://kangaswad.wordpress.com"},
-    {n:"Tanya Jawab Agama Islam",d:"Tanya jawab agama",u:"https://tanyajawabagamaislam.com"},
     {n:"Dzulqarnain",d:"Artikel & kajian",u:"https://dzulqarnain.net"},
     {n:"Kisah Muslim",d:"Kisah Islami",u:"https://kisahmuslim.com"},
     {n:"Abu Faizah",d:"Blog artikel Islam",u:"https://abufaizah75.blogspot.com"}
   ];
+  // Ikon situs: yang sudah pernah termuat dicatat (disimpan di perangkat) sehingga langsung tampil tanpa menunggu
+  var ICOK={};try{ICOK=JSON.parse(localStorage.getItem("icok")||"{}")}catch(e){}
+  function icUrl(s){return s.i||(s.u?"https://www.google.com/s2/favicons?sz=128&domain_url="+encodeURIComponent(s.u):"")}
+  function icSave(){try{localStorage.setItem("icok",JSON.stringify(ICOK))}catch(e){}}
+  function setIcon(ic,s,fav){
+    var iu=icUrl(s);if(!iu||(!s.i&&!fav))return;
+    if(ICOK[iu]){ic.textContent="";ic.style.backgroundImage="url("+iu+")";return}
+    var im=new Image();
+    im.onload=function(){if(im.naturalWidth>16||s.i){ICOK[iu]=1;icSave();ic.textContent="";ic.style.backgroundImage="url("+iu+")"}};
+    im.src=iu;
+  }
+  function preSite(u){try{var o=new URL(u).origin,k="pc_"+o;if(document.getElementById(k))return;var l=document.createElement("link");l.id=k;l.rel="preconnect";l.href=o;document.head.appendChild(l)}catch(e){}}
+  function warmSites(){ // dijalankan saat app menganggur: ikon dimuat lebih dulu ke cache agar daftar langsung lengkap
+    var all=BELAJAR.concat(ARTIKEL),i=0;
+    (function step(){
+      var n=0;
+      while(i<all.length&&n<4){var s=all[i++],iu=icUrl(s);n++;
+        if(iu&&!ICOK[iu]&&(s.i||all.indexOf(s)>=BELAJAR.length)){(function(s,iu){var im=new Image();im.onload=function(){if(im.naturalWidth>16||s.i){ICOK[iu]=1;icSave()}};im.src=iu})(s,iu)}
+      }
+      if(i<all.length)setTimeout(step,150);
+    })();
+  }
+  if(window.requestIdleCallback)requestIdleCallback(warmSites,{timeout:3000});else setTimeout(warmSites,2000);
   function renderOth(){
     var o=document.getElementById("oth");o.innerHTML="";
     o.scrollTop=0;
@@ -1350,8 +1369,9 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
       var bg=el("div","cgrid");
       BELAJAR.forEach(function(s){
         var b=el("button","cc"),ic=el("div","av",s.n.charAt(0).toUpperCase());ic.style.cursor="pointer";
-        if(s.i){var im=new Image();im.onload=function(){ic.textContent="";ic.style.backgroundImage="url("+s.i+")"};im.src=s.i}
+        setIcon(ic,s,false);
         b.appendChild(ic);b.appendChild(el("b",null,s.n));if(s.d)b.appendChild(el("small",null,s.d));
+        b.addEventListener("pointerdown",function(){preSite(s.u)},{passive:true});
         b.onclick=function(){openSite(s)};bg.appendChild(b);
       });
       o.appendChild(bg);return;
@@ -1363,9 +1383,9 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
       var ag=el("div","cgrid");
       ARTIKEL.forEach(function(s){
         var b=el("button","cc"),ic=el("div","av",s.n.charAt(0).toUpperCase());ic.style.cursor="pointer";
-        var iu=s.i||("https://www.google.com/s2/favicons?sz=128&domain_url="+encodeURIComponent(s.u));
-        var im=new Image();im.onload=function(){if(im.naturalWidth>16||s.i){ic.textContent="";ic.style.backgroundImage="url("+iu+")"}};im.src=iu;
+        setIcon(ic,s,true);
         b.appendChild(ic);b.appendChild(el("b",null,s.n));if(s.d)b.appendChild(el("small",null,s.d));
+        b.addEventListener("pointerdown",function(){preSite(s.u)},{passive:true});
         b.onclick=function(){openSite(s)};ag.appendChild(b);
       });
       o.appendChild(ag);return;
@@ -1851,6 +1871,8 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
   }
   function openSite(x){ // situs belajar dibuka di dalam app, tombol di atas untuk membuka situsnya di browser
     var fr=mapv.querySelector("iframe"),wy=mapv.querySelector(".wy");
+    mapv.classList.add("open");mapv.classList.add("ld");
+    fr.onload=function(){mapv.classList.remove("ld")};
     fr.src=x.u;
     mapv.querySelector(".mt").textContent=x.n;
     mapv.querySelector(".wz").style.display="none";
@@ -1864,7 +1886,7 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
     mapv.querySelector(".wy").style.display="none";mapv.querySelector(".wz").style.display="none";
     mapv.classList.add("open");
   }
-  function closeMap(){mapv.classList.remove("open");mapv.querySelector("iframe").src="about:blank"}
+  function closeMap(){mapv.classList.remove("open");mapv.classList.remove("ld");mapv.querySelector("iframe").src="about:blank"}
   mapv.querySelector(".wx").onclick=closeMap;
   document.addEventListener("keydown",function(e){if(e.key==="Escape"){closeWatch();closeMap()}});
   function setTab(t){
