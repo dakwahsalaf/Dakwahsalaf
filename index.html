@@ -267,7 +267,9 @@ var YT_GROUPS = [
   ]},
   {n:"Arab Saudi", c:[
     "https://www.youtube.com/@fawaidalqasim",
-    "https://www.youtube.com/@tilawatalharamain1"
+    "https://www.youtube.com/@tilawatalharamain1",
+    "https://www.youtube.com/@athartayyib_official",
+    "https://www.youtube.com/@sualruhaily"
   ]}
 ];
 // Tab "Lainnya": channel masjid dan sekolah (belum ikut di Beranda/Short, hanya muncul di tab Lainnya).
@@ -792,24 +794,27 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
 
   /* ---------- Tab Beranda (video panjang) + Tab ---------- */
   var home=document.getElementById("home"),watch=document.getElementById("watch"),tabsEl=document.getElementById("tabs"),HMAX=50,HV="dakwah_ch_v2:",CI={},lastHome=0,chs=document.getElementById("chs"),hist=document.getElementById("hist"),HK="dakwah_hist_v1",chp=document.getElementById("chp"),cTab="v",cSort="n",curCh="";
-  function details(ids){
-    var jobs=[],out=[];
+  function details(ids,onP){ // onP(0..1) dipanggil tiap satu kelompok 50 video selesai
+    var jobs=[],out=[],dn=0,nj=Math.ceil(ids.length/50);
     for(var i=0;i<ids.length;i+=50)(function(ch){
       jobs.push(api("videos",{part:"snippet,contentDetails,liveStreamingDetails,statistics",id:ch.join(",")}).then(function(d){
         (d.items||[]).forEach(function(v){var s=v.snippet,t=s.thumbnails||{},ld=v.liveStreamingDetails;
           out.push({id:v.id,t:s.title,c:s.channelTitle,p:s.publishedAt,d:secs(v.contentDetails.duration),th:(t.maxres||t.medium||t.default||{}).url||"",lb:s.liveBroadcastContent||"none",rec:!!(ld&&ld.actualEndTime),vw:+((v.statistics||{}).viewCount)||0,x:((s.tags||[]).join(" ")+" "+(s.description||"").slice(0,400))})});
+        if(onP)onP(++dn/nj);
       }));
     })(ids.slice(i,i+50));
     return Promise.all(jobs).then(function(){out=out.filter(function(v){return!isBlocked(v.id)});out.sort(function(a,b){return ids.indexOf(a.id)-ids.indexOf(b.id)});return out});
   }
   function plIds(pl,n){return api("playlistItems",{part:"contentDetails",maxResults:n,playlistId:pl}).then(function(d){return(d.items||[]).map(function(x){return x.contentDetails.videoId})})}
-  function plAll(pl){ // semua video dalam playlist, tanpa batas 200
-    var ids=[];
+  function plAll(pl,onP){ // semua video dalam playlist; onP(0..1) dari jumlah total yang dilaporkan YouTube
+    var ids=[],tot=0;
     function page(tok){
       var q={part:"contentDetails",maxResults:50,playlistId:pl};if(tok)q.pageToken=tok;
       return api("playlistItems",q).then(function(d){
         (d.items||[]).forEach(function(it){ids.push(it.contentDetails.videoId)});
-        return d.nextPageToken&&ids.length<5000?page(d.nextPageToken):ids;
+        tot=(d.pageInfo&&d.pageInfo.totalResults)||tot;
+        if(onP&&tot)onP(Math.min(1,ids.length/tot));
+        return d.nextPageToken&&ids.length<20000?page(d.nextPageToken):ids;
       });
     }
     return page("");
@@ -875,12 +880,13 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
   // Arsip: seluruh video lama tiap channel (dimuat sekali saat mulai mencari, lalu disimpan 3 hari)
   function arcChannel(ch){
     var ck="dakwah_arc_v1:"+ch,c=load(ck,null);
-    if(c&&Date.now()-c.t<259200000)return Promise.resolve(c.items);
+    if(c&&Date.now()-c.t<259200000){arcProg[ch]={l:1,t:1};arcShow();return Promise.resolve(c.items)}
     return chInfo(ch).then(function(i){
-      var out=[],name=i.n,pl="UULF"+i.id.slice(2);
+      var out=[],name=i.n,pl="UULF"+i.id.slice(2),got=0;
       function page(tok){
         var q={part:"snippet,contentDetails",maxResults:50,playlistId:pl};if(tok)q.pageToken=tok;
         return api("playlistItems",q).then(function(d){
+          got+=(d.items||[]).length;arcProg[ch]={l:got,t:Math.max(got,(d.pageInfo&&d.pageInfo.totalResults)||got)};arcShow();
           (d.items||[]).forEach(function(it){
             var sn=it.snippet||{},id=(it.contentDetails||{}).videoId;
             if(!id||isBlocked(id)||sn.title==="Private video"||sn.title==="Deleted video")return;
@@ -890,8 +896,19 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
         });
       }
       return page("");
-    }).then(function(a){save(ck,{t:Date.now(),items:a});return a}).catch(function(){return c?c.items:[]});
+    }).then(function(a){save(ck,{t:Date.now(),items:a});arcProg[ch]={l:1,t:1};arcShow();return a}).catch(function(){arcProg[ch]={l:1,t:1};arcShow();return c?c.items:[]});
   }
+  // Kemajuan 0–100% memuat arsip video lama semua channel (total tiap channel diketahui dari YouTube)
+  var arcProg={},arcMax=0,arcUi=null;
+  function arcPct(){
+    var l=0,t=0,n=0,k;
+    for(k in arcProg){l+=arcProg[k].l;t+=arcProg[k].t;n++}
+    var p=t?l/t*100:0;
+    if(n<YT_CHANNELS.length)p=Math.min(p,95*n/YT_CHANNELS.length); // belum semua channel melapor: jangan terlalu cepat naik
+    if(arcState===2)p=100;
+    arcMax=Math.max(arcMax,p);return Math.floor(arcMax);
+  }
+  function arcShow(){if(arcUi&&arcUi.isConnected)arcUi.set(arcPct())}
   function loadArc(){
     if(arcState||!YT_API_KEY)return;arcState=1;
     Promise.all(YT_CHANNELS.map(arcChannel)).then(function(ls){
@@ -905,17 +922,20 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
     if(q){
       // Cari di judul, nama channel, tag, dan deskripsi; kata sebagian cocok pun ikut tampil (urut paling relevan)
       if(homeArc.length){var seen={};items.forEach(function(v){seen[v.id]=1});items=items.concat(homeArc.filter(function(v){return!seen[v.id]}))}
-      var ws=q.split(" ").filter(Boolean),need=ws.length>2?Math.ceil(ws.length/2):ws.length,sc=[];
+      // Pencarian luas: ejaan disamakan (sholat/shalat/salat), kata sinonim, salah ketik ringan, dan kata sebagian ikut cocok.
+      // Cukup separuh kata yang cocok; makin banyak kata cocok & makin di judul, makin atas.
+      var kq=kw(homeQ),ws=kq.split(" ").filter(Boolean),sw=ws.filter(function(w){return STOP.indexOf(w)<0});if(sw.length)ws=sw;
+      var need=ws.length>1?Math.ceil(ws.length/2):1,sc=[];
       items.forEach(function(v){
-        var t=nz(v.t),c=nz(v.c),x=nz(v.x),n=0,sum=0;
-        ws.forEach(function(w){var p=t.indexOf(w)>-1?3:c.indexOf(w)>-1?2:x.indexOf(w)>-1?1:0;if(p){n++;sum+=p}});
-        if(n>=need){if(t.indexOf(q)>-1)sum+=4;sc.push({v:v,s:sum+n*2})}
+        var f=fields(v),n=0,sum=0;
+        ws.forEach(function(w){var p=wScore(w,f);if(p){n++;sum+=p}});
+        if(n>=need){if(f.t.indexOf(kq)>-1)sum+=4;sc.push({v:v,s:sum+n*2})}
       });
       sc.sort(function(a,b){return b.s-a.s||new Date(b.v.p)-new Date(a.v.p)});
       items=sc.map(function(o){return o.v});
     }
     items=items.slice(0,q?300:100);
-    if(q&&arcState===1)box.appendChild(el("div","ab","Memuat arsip video lama… hasil akan bertambah."));
+    if(q&&arcState===1){var ap=mkProg("Memuat video lama… hasil akan bertambah.");arcUi=ap;ap.set(arcPct());box.appendChild(ap)}
     if(!items.length){box.appendChild(el("div","ab","Tidak ada hasil untuk \""+homeQ+"\"."));yt(box);return}
     var lv=items.filter(function(v){return v.lb!=="none"}),rest=items.filter(function(v){return v.lb==="none"}),g;
     if(lv.length){box.appendChild(el("div","sec","Live"));g=el("div","grid");lv.forEach(function(v){g.appendChild(card(v,1))});box.appendChild(g);if(rest.length)box.appendChild(el("div","sec","Video"))}
@@ -1039,7 +1059,7 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
       gr.c.forEach(function(c){
         var i=CI[c],nm=i&&i.n?i.n:plain(c),b=el("button","cc");
         b.appendChild(avatar(i,nm));b.appendChild(el("b",null,nm));
-        if(cq&&nz(nm+" "+(i&&i.h||"")).indexOf(cq)<0)return;
+        if(cq&&!chHit(chQ,nm+" "+(i&&i.h||"")))return;
         if(i){var sm=(i.h?plain(i.h)+" · ":"")+(i.s?nf(i.s)+" subscriber":nf(i.v)+" video");b.appendChild(el("small",null,sm))}
         b.onclick=function(){openChannel(c)};g.appendChild(b);
       });
@@ -1070,6 +1090,84 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
     });
   }
   function nz(s){return String(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f\u064B-\u065F\u0670\u0640]/g,"").replace(/[\u0622\u0623\u0625\u0671]/g,"\u0627").replace(/\u0649/g,"\u064A").replace(/\u0629/g,"\u0647").replace(/[\u2018\u2019\u02BF\u02BE`']/g,"").replace(/[^\p{L}\p{N}\s]/gu," ").replace(/\s+/g," ").trim()}
+  /* ---------- Pencarian luas ---------- */
+  // kw: bentuk "disamakan" untuk pencocokan: ejaan Arab-Indonesia yang berbeda dibuat sama
+  // (sholat/shalat/salat/solat, dzikir/zikir, aqidah/akidah, syaikh/syekh, hadits/hadis, dst.)
+  function kw(s){
+    return nz(s).replace(/sy|sh/g,"s").replace(/kh/g,"h").replace(/gh/g,"g").replace(/th|ts/g,"s").replace(/dz|dh|zh|z/g,"d")
+      .replace(/q/g,"k").replace(/ph|v/g,"f").replace(/([a-z])\1+/g,"$1").replace(/o/g,"a");
+  }
+  var STOP=["di","yang","dan","ke","dari","untuk","apa","itu","ini","dengan","atau","pada","adalah","the","of","and"];
+  var SYN=[
+    ["kajian","ceramah","pengajian","dars","muhadharah","tabligh","khutbah"],
+    ["sholat","shalat","salat","solat","prayer"],
+    ["puasa","shaum","shiyam","fasting"],
+    ["dzikir","zikir","dhikr","wirid"],
+    ["hadits","hadis","hadith"],
+    ["aqidah","akidah","tauhid","aqeedah"],
+    ["fiqih","fikih","fiqh"],
+    ["tafsir","tafseer"],
+    ["quran","alquran","kuran","mushaf"],
+    ["murottal","tilawah","bacaan","recitation"],
+    ["haji","umrah","manasik"],
+    ["zakat","infaq","sedekah","shodaqoh","sadaqah"],
+    ["nikah","menikah","pernikahan","munakahat"],
+    ["syirik","musyrik","kesyirikan"],
+    ["bidah","bidaah"],
+    ["wanita","muslimah","akhwat","perempuan"],
+    ["taubat","tobat","istighfar"],
+    ["syaikh","syekh","sheikh","ustadz","ustad"],
+    ["sabar","ujian","musibah"],
+    ["ilmu","belajar","menuntut"],
+    ["doa","dua","doa harian"],
+    ["sirah","sejarah","kisah","nabi"]
+  ],SYNM={};
+  SYN.forEach(function(g){
+    var k=[];g.forEach(function(x){x=kw(x);if(x&&k.indexOf(x)<0)k.push(x)});
+    k.forEach(function(w){SYNM[w]=(SYNM[w]||[]).concat(k.filter(function(x){return x!==w&&(SYNM[w]||[]).indexOf(x)<0}))});
+  });
+  // kata a dan b beda paling banyak 1 huruf (2 huruf bila kata ≥ 8 huruf)
+  function near(a,b){
+    var m=a.length>=8?2:1,la=a.length,lb=b.length;
+    if(lb<3||Math.abs(la-lb)>m)return false;
+    var prev=[],cur,i,j,mn;
+    for(j=0;j<=lb;j++)prev[j]=j;
+    for(i=1;i<=la;i++){
+      cur=[i];mn=i;
+      for(j=1;j<=lb;j++){cur[j]=Math.min(prev[j]+1,cur[j-1]+1,prev[j-1]+(a.charCodeAt(i-1)===b.charCodeAt(j-1)?0:1));if(cur[j]<mn)mn=cur[j]}
+      if(mn>m)return false;prev=cur;
+    }
+    return prev[lb]<=m;
+  }
+  function fields(v){if(!v._f)v._f={t:kw(v.t),c:kw(v.c),x:kw(v.x)};return v._f}
+  // Nilai kecocokan satu kata dengan satu video: persis (judul 3 / channel 2 / deskripsi 1), sinonim, lalu salah ketik ringan
+  function wScore(w,f){
+    var al=SYNM[w],a,k,i;
+    if(f.t.indexOf(w)>-1)return 3;if(f.c.indexOf(w)>-1)return 2;if(f.x.indexOf(w)>-1)return 1;
+    if(al)for(k=0;k<al.length;k++){a=al[k];if(f.t.indexOf(a)>-1)return 2.2;if(f.c.indexOf(a)>-1)return 1.4;if(f.x.indexOf(a)>-1)return .7}
+    if(w.length>=4){
+      var fs=[["t",1.8],["c",1.2],["x",.6]];
+      for(k=0;k<3;k++){var tk=f[fs[k][0]].split(" ");for(i=0;i<tk.length;i++)if(near(w,tk[i]))return fs[k][1]}
+    }
+    return 0;
+  }
+  function chHit(q,text){
+    var t=kw(text),ws=kw(q).split(" ").filter(Boolean),tk=t.split(" ");
+    return ws.every(function(w){
+      if(t.indexOf(w)>-1)return true;
+      var al=SYNM[w];if(al&&al.some(function(a){return t.indexOf(a)>-1}))return true;
+      return w.length>=4&&tk.some(function(x){return near(w,x)});
+    });
+  }
+  // Bilah kemajuan 0–100% (dipakai saat memuat video lama)
+  function mkProg(label){
+    var w=el("div","ab"),t=el("div",null,label+" 0%"),bar=el("div"),fl=document.createElement("i");
+    bar.style.cssText="height:4px;border-radius:2px;background:rgba(255,255,255,.2);margin-top:8px;overflow:hidden";
+    fl.style.cssText="display:block;height:100%;width:0;background:var(--acc);transition:width .2s";
+    bar.appendChild(fl);w.appendChild(t);w.appendChild(bar);
+    w.set=function(p){p=Math.max(0,Math.min(100,Math.round(p)));t.textContent=label+" "+p+"%";fl.style.width=p+"%"};
+    return w;
+  }
   // Hanya menampilkan alamat yang sudah terdaftar di app (OTH[].p, isi k = kota, ng = negara), disaring sesuai lokasi pengguna.
   function autoNear(gr,o){
     var box=el("div"),all=gr.p||[];o.appendChild(box);
@@ -1259,11 +1357,16 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
   document.addEventListener("visibilitychange",function(){if(!document.hidden&&Date.now()-lastHome>300000)loadHome()});
 
   /* ---------- Halaman channel ---------- */
-  function chVids(i,k){
+  function chVids(i,k,onP){
     var pre={v:"UULF",s:"UUSH",l:"UULV"}[k];
-    return cch(HV+k+i.id,function(){
-      return plIds(pre+i.id.slice(2),50).catch(function(){return[]}).then(function(ids){return ids.length||k==="s"?ids:plIds("UU"+i.id.slice(2),50)}).then(details).then(function(a){
-        return a.filter(function(v){return k==="l"?(v.lb!=="none"||v.rec):k==="s"?v.d<=180:v.d>180});
+    // Semua video channel (bukan hanya 50 terbaru): seluruh isi playlist unggahan dimuat halaman demi halaman
+    return cch(HV+"all"+k+i.id,function(){
+      // kemajuan: 0–70% mengambil daftar video, 70–100% mengambil rincian tiap video
+      function p1(f){if(onP)onP(f*70)}
+      return plAll(pre+i.id.slice(2),p1).catch(function(){return[]}).then(function(ids){return ids.length||k==="s"?ids:plAll("UU"+i.id.slice(2),p1).catch(function(){return[]})}).then(function(ids){p1(1);return details(ids,function(f){if(onP)onP(70+f*30)})}).then(function(a){
+        a=a.filter(function(v){return k==="l"?(v.lb!=="none"||v.rec):k==="s"?v.d<=180:v.d>180});
+        a.forEach(function(v){delete v.x}); // hemat ruang simpan: deskripsi tidak perlu di halaman channel
+        return a;
       });
     });
   }
@@ -1316,15 +1419,38 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
   function showTab(i,body){
     body.innerHTML="";var tk=cTab;
     if(tk==="t"){body.appendChild(el("div","ab",(i.d||"Belum ada deskripsi.")+"\n\nBergabung: "+new Date(i.j).toLocaleDateString("id-ID",{day:"numeric",month:"long",year:"numeric"})));return}
-    if(tk==="p"){plTab(i,body);return}    body.appendChild(el("div","ab","Memuat…"));
-    chVids(i,tk).then(function(a){
+    if(tk==="p"){plTab(i,body);return}
+    var pg=mkProg("Memuat video lama…");body.appendChild(pg);
+    chVids(i,tk,pg.set).then(function(a){
       if(tk!==cTab)return;body.innerHTML="";
       if(!a.length){body.appendChild(el("div","ab",tk==="l"?"Belum ada live.":"Belum ada video."));return}
       var so=el("div","so"),host=el("div",tk==="s"?"gs":"grid");
-      function put(b){host.innerHTML="";b.forEach(function(v,ix){v.ch=curCh;var c=card(v,0);c.onclick=function(){openWatch(v,null,tk==="s",tk==="s"?{a:b,i:ix}:null)};host.appendChild(c)});
+      // Semua video ditampilkan, tetapi digambar bertahap (60 per kali, otomatis bertambah saat digulir ke bawah)
+      var PG=60;
+      function put(b){
+        host.innerHTML="";var n=0,more=null,obs=null;
+        function add(upto){
+          if(obs){obs.disconnect();obs=null}
+          if(more){more.remove();more=null}
+          for(;n<upto&&n<b.length;n++)(function(v,ix){
+            v.ch=curCh;var c=card(v,0);
+            // daftar short untuk geser dibatasi di sekitar video yang dibuka agar tetap ringan
+            c.onclick=function(){var st=Math.max(0,ix-30);openWatch(v,null,tk==="s",tk==="s"?{a:b.slice(st,ix+60),i:ix-st}:null)};
+            host.appendChild(c);
+          })(b[n],n);
+          if(n<b.length){
+            more=el("button","sub","Tampilkan lebih banyak ("+(b.length-n)+" lagi)");
+            more.style.cssText="grid-column:1/-1;margin:8px auto 16px;display:block";
+            more.onclick=function(){add(n+PG)};host.appendChild(more);
+            if("IntersectionObserver" in window){obs=new IntersectionObserver(function(es){if(es[0].isIntersecting)add(n+PG)},{root:chp,rootMargin:"600px 0px"});obs.observe(more)}
+          }
+        }
+        var hix=-1;
+        if(chHl&&tk==="s")b.forEach(function(v,ix){if(v.id===chHl.id)hix=ix});
+        add(Math.max(PG,hix+1));
         if(chHl&&tk==="s"){
           var hid=chHl.id,hit=null;chHl=null;
-          b.forEach(function(v,ix){if(v.id===hid)hit=host.children[ix]});
+          if(hix>-1)hit=host.children[hix];
           if(!hit){ // belum termuat di daftar: tampilkan kartu "Sedang ditonton" (thumbnail dari i.ytimg.com, tanpa API)
             hit=el("div","vc");var th0=el("div","th"),in0=el("div","in");
             th0.style.backgroundImage="url(https://i.ytimg.com/vi/"+hid+"/hqdefault.jpg)";in0.appendChild(el("div","ti","Sedang ditonton"));
@@ -1335,17 +1461,11 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
         }
       }
       function draw(){
-        var sk=cSort;
-        if(sk==="o"){
-          host.innerHTML="";var m=el("div","ab","Memuat video terlama…");m.style.gridColumn="1/-1";host.appendChild(m);
-          chOldest(i,tk,function(n){if(m.isConnected)m.textContent="Memuat video terlama… ("+n+" video diperiksa)"}).then(function(o){
-            if(cSort!==sk||tk!==cTab)return;
-            if(!o.length){m.textContent="Belum ada video.";return}
-            put(o);
-          });
-          return;
-        }
-        var b=a.slice();if(sk==="p")b.sort(function(x,y){return y.vw-x.vw});put(b);
+        var sk=cSort,b=a.slice();
+        if(sk==="p")b.sort(function(x,y){return y.vw-x.vw});
+        else if(sk==="o")b.sort(function(x,y){return new Date(x.p)-new Date(y.p)}); // semua video sudah dimuat, jadi terlama tinggal diurutkan
+        else b.sort(function(x,y){return new Date(y.p)-new Date(x.p)});
+        put(b);
       }
       [["n","Terbaru"],["p","Terpopuler"],["o","Terlama"]].forEach(function(s){
         var b=el("button",s[0]===cSort?"on":null,s[1]);
