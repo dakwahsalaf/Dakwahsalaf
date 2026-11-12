@@ -356,8 +356,12 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
   var feed=document.getElementById("feed"), muted=false, unlocked=false, autoMuted=false, skipTap=0, likes={}, pool=[], total=0, lastId="", want=null, cur=null, live=[], AHEAD=2, BEHIND=1;
   var startEl=document.getElementById("start");
 
-  try{want=new URLSearchParams(location.search).get("v")}catch(e){}
   var tab="home"; // link ?v= selalu dibuka lewat layar tonton di atas Beranda (tab Short menutup layar tonton)
+  // link ?s=ID (hasil Bagikan dari tab Short): langsung buka tab Short 9:16, video itu tampil pertama, bisa digulir ke video lain
+  try{
+    var sid=new URLSearchParams(location.search).get("s");
+    if(sid&&/^[\w-]{11}$/.test(sid)&&!isBlocked(sid)){want=sid;tab="short";history.replaceState(null,"",location.pathname)}
+  }catch(e){}
   function load(k,d){try{var v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}}
   function save(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
   function el(t,c,x){var n=document.createElement(t);if(c)n.className=c;if(x!=null)n.textContent=x;return n}
@@ -771,7 +775,7 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
   var TEXT="Tonton video dakwah ini:",toastT=null;
   function say(t,ms){toast.textContent=t;toast.classList.add("show");clearTimeout(toastT);toastT=setTimeout(function(){toast.classList.remove("show")},ms||1800)}
   function openShare(id){
-    shareUrl=location.origin+location.pathname+"?v="+encodeURIComponent(id);
+    shareUrl=location.origin+location.pathname+"?s="+encodeURIComponent(id);
     document.getElementById("sl").textContent=shareUrl;
     document.getElementById("more").style.display=navigator.share?"flex":"none";
     shareEl.classList.add("open");
@@ -1000,8 +1004,8 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
     function close(){ov.remove()}
     function item(ic,txt,fn){var b=el("button","mi");b.appendChild(el("b",null,ic));b.appendChild(document.createTextNode(txt));b.onclick=fn;sh.appendChild(b)}
     sh.appendChild(el("p","sn",t));
-    item("↗️","Bagikan",function(){close();var u=appLink(v.id,0);if(navigator.share)navigator.share({title:t,text:t,url:u}).catch(function(){});else{copyText(u);say("Tautan disalin")}});
-    item("🔗","Salin link",function(){close();copyText(appLink(v.id,0));say("Tautan disalin")});
+    item("↗️","Bagikan",function(){close();var u=appLink(v.id,0,v.s);if(navigator.share)navigator.share({title:t,text:t,url:u}).catch(function(){});else{copyText(u);say("Tautan disalin")}});
+    item("🔗","Salin link",function(){close();copyText(appLink(v.id,0,v.s));say("Tautan disalin")});
     item("▶️","Buka di YouTube",function(){close();window.open("https://www.youtube.com/watch?v="+v.id,"_blank","noopener")});
     item("🚩","Laporkan",function(){close();openReport(v,cardEl)});
     ov.appendChild(sh);ov.onclick=function(e){if(e.target===ov)close()};document.body.appendChild(ov);
@@ -1766,8 +1770,9 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
   }
   /* ---------- Bagikan video ---------- */
   var wV=null;
-  function appLink(id,t){
+  function appLink(id,t,sh){
     var base=/^https?:$/.test(location.protocol)?location.origin+location.pathname:location.href.split(/[?#]/)[0];
+    if(sh)return base+"?s="+id;
     return base+"?v="+id+(t>5?"&t="+Math.floor(t):"");
   }
   function copyText(x,btn,lbl){
@@ -1783,7 +1788,7 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
     var row=el("div","lk"),inp=el("input");inp.readOnly=true;var cb=el("button",null,"Salin");row.appendChild(inp);row.appendChild(cb);sh.appendChild(row);
     var cbx=null;
     if(canT){var lb=el("label");cbx=el("input");cbx.type="checkbox";lb.appendChild(cbx);lb.appendChild(document.createTextNode("Mulai dari menit "+fmtL(wTime)));sh.appendChild(lb)}
-    function link(){return appLink(v.id,cbx&&cbx.checked?wTime:0)}
+    function link(){return appLink(v.id,cbx&&cbx.checked?wTime:0,wCur&&wCur.s)}
     function msg(){return t+"\n"+link()}
     function sync(){inp.value=link()}sync();if(cbx)cbx.onchange=sync;
     inp.onfocus=function(){inp.select()};
@@ -1919,9 +1924,6 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
   }
   tabsEl.addEventListener("click",function(e){var b=e.target.closest("button");if(!b)return;if(b.dataset.t!==tab)setTab(b.dataset.t);else closeCh()});
   setTab(tab);loadHome();
-  // Link langsung ke tab: ?tab=short (juga home, channels, history, oth). Diabaikan jika ada ?v=
-  (function(){try{var q=new URLSearchParams(location.search),t=q.get("tab");
-    if(t&&!q.get("v")&&["home","short","channels","history","oth"].indexOf(t)>=0&&t!==tab)setTab(t)}catch(e){}})();
   (function(){
     var q=new URLSearchParams(location.search),id=q.get("v"),st=parseInt(q.get("t"),10)||0;
     if(!id||!/^[\w-]{11}$/.test(id))return;
