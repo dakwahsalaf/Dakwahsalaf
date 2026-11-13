@@ -61,11 +61,11 @@ html,body{height:100%;background:var(--bg);color:var(--fg);font-family:system-ui
 #share.open{display:flex}
 .sp{width:100%;background:#1b1b1b;border-radius:20px 20px 0 0;padding:18px 16px calc(20px + env(safe-area-inset-bottom,0px))}
 .sp h3{font-size:16px;margin-bottom:4px}
-.sp small{display:block;color:var(--mut);font-size:12px;margin-bottom:16px;word-break:break-all}
+.sp small{white-space:pre-line;display:block;color:var(--mut);font-size:12px;margin-bottom:16px;word-break:break-all}
 .opts{display:grid;grid-template-columns:repeat(3,1fr);gap:16px 8px}
 .opt{background:none;border:0;color:#fff;font-size:12px;display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer}
 .opt i{width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-style:normal;font-weight:700;font-size:16px;color:#fff}
-#toast{position:fixed;left:50%;bottom:calc(30px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:30;background:#fff;color:#000;padding:10px 16px;border-radius:20px;font-size:14px;font-weight:600;opacity:0;transition:opacity .2s;pointer-events:none}
+#toast{position:fixed;left:50%;bottom:calc(30px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:2000;background:#fff;color:#000;padding:10px 16px;border-radius:20px;font-size:14px;font-weight:600;opacity:0;transition:opacity .2s;pointer-events:none}
 #toast.show{opacity:1}
 #start{position:fixed;inset:0;z-index:15;background:rgba(0,0,0,.65);display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;padding:32px;cursor:pointer}
 #start.show{display:flex}
@@ -774,24 +774,42 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
   var shareEl=document.getElementById("share"),toast=document.getElementById("toast"),shareUrl="";
   var TEXT="Tonton video dakwah ini:",toastT=null;
   function say(t,ms){toast.textContent=t;toast.classList.add("show");clearTimeout(toastT);toastT=setTimeout(function(){toast.classList.remove("show")},ms||1800)}
+  var TT={};
+  function fetchTitle(id){
+    if(TT[id])return Promise.resolve(TT[id]);
+    return fetch("https://www.youtube.com/oembed?format=json&url="+encodeURIComponent("https://www.youtube.com/watch?v="+id))
+      .then(function(r){if(!r.ok)throw 0;return r.json()})
+      .then(function(d){return(TT[id]=d.title||"")})
+      .catch(function(){
+        if(!YT_API_KEY)return "";
+        return api("videos",{part:"snippet",id:id}).then(function(d){var v=d.items&&d.items[0];return v?(TT[id]=v.snippet.title||""):""}).catch(function(){return ""});
+      });
+  }
+  function okTitle(t){return t&&t!=="Video"&&t!=="Video tidak tersedia"}
+  function shareMsg(t,u){return okTitle(t)?t+"\n"+u:u}
+  var shareTitle="",shareP=null;
+  function showShareInfo(){document.getElementById("sl").textContent=(shareTitle?shareTitle+"\n":"")+shareUrl}
   function openShare(id){
     shareUrl=location.origin+location.pathname+"?s="+encodeURIComponent(id);
-    document.getElementById("sl").textContent=shareUrl;
+    shareTitle=TT[id]||"";
+    showShareInfo();
+    shareP=shareTitle?Promise.resolve(shareTitle):fetchTitle(id);
+    var cur=id;shareP.then(function(t){if(shareUrl.indexOf("?s="+encodeURIComponent(cur))<0)return;shareTitle=t||"";showShareInfo()});
     document.getElementById("more").style.display=navigator.share?"flex":"none";
     shareEl.classList.add("open");
-  }
-  function copy(){
-    function fb(){var t=document.createElement("textarea");t.value=shareUrl;t.style.position="fixed";t.style.opacity="0";document.body.appendChild(t);t.select();try{document.execCommand("copy");say("Tautan disalin")}catch(e){say("Gagal menyalin")}document.body.removeChild(t)}
-    if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(shareUrl).then(function(){say("Tautan disalin")},fb);else fb();
   }
   shareEl.addEventListener("click",function(e){
     if(e.target===shareEl){shareEl.classList.remove("open");return}
     var b=e.target.closest(".opt");if(!b)return;
-    var a=b.dataset.a,u=encodeURIComponent(shareUrl),t=encodeURIComponent(TEXT);
-    if(a==="copy"){copy()}
-    else if(a==="more"){navigator.share({title:"Dakwah Salaf",text:TEXT,url:shareUrl}).catch(function(){})}
+    var a=b.dataset.a;
+    if(a==="copy"){
+      (shareP||Promise.resolve()).then(function(){copyText(shareMsg(shareTitle,shareUrl))});
+      shareEl.classList.remove("open");return;
+    }
+    var u=encodeURIComponent(shareUrl),tx=shareTitle||TEXT,t=encodeURIComponent(tx),m=shareTitle?shareTitle+"\n"+shareUrl:TEXT+"\n"+shareUrl;
+    if(a==="more"){navigator.share({title:shareTitle||"Dakwah Salaf",text:m}).catch(function(err){if(!err||err.name!=="AbortError")copyText(m)})}
     else{
-      var link={wa:"https://wa.me/?text="+t+"%20"+u,tg:"https://t.me/share/url?url="+u+"&text="+t,fb:"https://www.facebook.com/sharer/sharer.php?u="+u,x:"https://twitter.com/intent/tweet?text="+t+"&url="+u}[a];
+      var link={wa:"https://wa.me/?text="+encodeURIComponent(m),tg:"https://t.me/share/url?url="+u+"&text="+t,fb:"https://www.facebook.com/sharer/sharer.php?u="+u+"&quote="+t,x:"https://twitter.com/intent/tweet?text="+t+"&url="+u}[a];
       window.open(link,"_blank","noopener");
     }
     shareEl.classList.remove("open");
@@ -1004,8 +1022,8 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
     function close(){ov.remove()}
     function item(ic,txt,fn){var b=el("button","mi");b.appendChild(el("b",null,ic));b.appendChild(document.createTextNode(txt));b.onclick=fn;sh.appendChild(b)}
     sh.appendChild(el("p","sn",t));
-    item("↗️","Bagikan",function(){close();var u=appLink(v.id,0,v.s);if(navigator.share)navigator.share({title:t,text:t,url:u}).catch(function(){});else{copyText(u);say("Tautan disalin")}});
-    item("🔗","Salin link",function(){close();copyText(appLink(v.id,0,v.s));say("Tautan disalin")});
+    item("↗️","Bagikan",function(){close();var m=shareMsg(t,appLink(v.id,0,v.s));if(navigator.share)navigator.share({title:t,text:m}).catch(function(err){if(!err||err.name!=="AbortError")copyText(m)});else copyText(m)});
+    item("🔗","Salin link",function(){close();copyText(shareMsg(t,appLink(v.id,0,v.s)))});
     item("▶️","Buka di YouTube",function(){close();window.open("https://www.youtube.com/watch?v="+v.id,"_blank","noopener")});
     item("🚩","Laporkan",function(){close();openReport(v,cardEl)});
     ov.appendChild(sh);ov.onclick=function(e){if(e.target===ov)close()};document.body.appendChild(ov);
@@ -1776,9 +1794,21 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
     return base+"?v="+id+(t>5?"&t="+Math.floor(t):"");
   }
   function copyText(x,btn,lbl){
-    function ok(){if(btn){var o=btn.textContent;btn.textContent=lbl||"Tersalin ✓";setTimeout(function(){btn.textContent=o},1600)}}
-    function fb(){var a=document.createElement("textarea");a.value=x;a.style.cssText="position:fixed;opacity:0";document.body.appendChild(a);a.select();try{document.execCommand("copy");ok()}catch(e){}document.body.removeChild(a)}
-    if(navigator.clipboard&&window.isSecureContext)navigator.clipboard.writeText(x).then(ok,fb);else fb();
+    function done(ok){
+      if(ok){
+        say("Tersalin ✓");
+        if(btn){if(btn._o==null)btn._o=btn.textContent;btn.textContent=lbl||"Tersalin ✓";clearTimeout(btn._t);btn._t=setTimeout(function(){btn.textContent=btn._o;btn._o=null},1600)}
+      }else say("Gagal menyalin. Tahan lama pada teks lalu pilih Salin.",2800);
+    }
+    function legacy(){
+      var a=document.createElement("textarea"),ok=false;
+      a.value=x;a.setAttribute("readonly","");a.style.cssText="position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;font-size:16px";
+      document.body.appendChild(a);a.focus();a.select();try{a.setSelectionRange(0,x.length)}catch(e){}
+      try{ok=document.execCommand("copy")}catch(e){}
+      document.body.removeChild(a);return ok;
+    }
+    if(navigator.clipboard&&navigator.clipboard.writeText&&window.isSecureContext)navigator.clipboard.writeText(x).then(function(){done(true)},function(){done(legacy())});
+    else done(legacy());
   }
   function openShareSheet(){
     if(!wV)return;
@@ -1789,24 +1819,24 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
     var cbx=null;
     if(canT){var lb=el("label");cbx=el("input");cbx.type="checkbox";lb.appendChild(cbx);lb.appendChild(document.createTextNode("Mulai dari menit "+fmtL(wTime)));sh.appendChild(lb)}
     function link(){return appLink(v.id,cbx&&cbx.checked?wTime:0,wCur&&wCur.s)}
-    function msg(){return t+"\n"+link()}
+    function msg(){return shareMsg(t,link())}
     function sync(){inp.value=link()}sync();if(cbx)cbx.onchange=sync;
     inp.onfocus=function(){inp.select()};
-    cb.onclick=function(){copyText(link(),cb)};
+    cb.onclick=function(){copyText(msg(),cb)};
     var gr=el("div","gr");
     function add(ic,name,fn){var b=el("button");b.appendChild(el("b",null,ic));b.appendChild(document.createTextNode(name));b.onclick=fn;gr.appendChild(b)}
     function go(u){return function(){window.open(u(),"_blank","noopener")}}
     var E=encodeURIComponent;
     add("💬","WhatsApp",go(function(){return"https://wa.me/?text="+E(msg())}));
     add("✈️","Telegram",go(function(){return"https://t.me/share/url?url="+E(link())+"&text="+E(t)}));
-    add("📘","Facebook",go(function(){return"https://www.facebook.com/sharer/sharer.php?u="+E(link())}));
+    add("📘","Facebook",go(function(){return"https://www.facebook.com/sharer/sharer.php?u="+E(link())+"&quote="+E(t)}));
     add("𝕏","X",go(function(){return"https://twitter.com/intent/tweet?text="+E(t)+"&url="+E(link())}));
     add("✉️","Email",function(){location.href="mailto:?subject="+E(t)+"&body="+E(msg())});
     add("📱","SMS",function(){location.href="sms:?&body="+E(msg())});
     add("📋","Salin teks",function(e){copyText(msg(),e.currentTarget,"Tersalin ✓")});
-    if(navigator.share)add("⋯","Lainnya",function(){navigator.share({title:t,text:t,url:link()}).catch(function(){})});
+    if(navigator.share)add("⋯","Lainnya",function(){navigator.share({title:t,text:msg()}).catch(function(err){if(!err||err.name!=="AbortError")copyText(msg())})});
     sh.appendChild(gr);
-    var yl=el("button","yl","Salin link YouTube");yl.onclick=function(){copyText("https://www.youtube.com/watch?v="+v.id+(cbx&&cbx.checked?"&t="+Math.floor(wTime)+"s":""),yl)};sh.appendChild(yl);
+    var yl=el("button","yl","Salin link YouTube");yl.onclick=function(){copyText(shareMsg(t,"https://www.youtube.com/watch?v="+v.id+(cbx&&cbx.checked?"&t="+Math.floor(wTime)+"s":"")),yl)};sh.appendChild(yl);
     if(!/^https?:$/.test(location.protocol)){var w=el("p","sn","Catatan: link ke app hanya berfungsi bila app dibuka dari alamat web (https), bukan dari file lokal.");w.style.whiteSpace="normal";w.style.marginTop="10px";sh.appendChild(w)}
     ov.appendChild(sh);ov.onclick=function(e){if(e.target===ov)ov.remove()};document.body.appendChild(ov);
   }
