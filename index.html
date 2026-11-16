@@ -902,7 +902,7 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
     homeAll=items;home.innerHTML="";
     var so=el("div","so"),inp=el("input","ci"),box=el("div"),tm=0;
     inp.type="search";inp.placeholder="Cari video atau channel…";inp.setAttribute("aria-label","Cari video");inp.value=homeQ;
-    homeBox=box;inp.addEventListener("input",function(){clearTimeout(tm);tm=setTimeout(function(){homeQ=inp.value;if(nz(homeQ).length>1)loadArc();drawHome(box)},200)});
+    homeBox=box;inp.addEventListener("input",function(){clearTimeout(tm);tm=setTimeout(function(){homeQ=inp.value;if(nz(homeQ).length>1&&!ytId(homeQ))loadArc();drawHome(box)},200)});
     so.appendChild(inp);home.appendChild(so);home.appendChild(box);drawHome(box);
   }
   // Arsip: seluruh video lama tiap channel (dimuat sekali saat mulai mencari, lalu disimpan 3 hari)
@@ -944,8 +944,36 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
       if(homeBox&&nz(homeQ))drawHome(homeBox);
     }).catch(function(){arcState=0});
   }
+  // Tempel link YouTube di pencarian Beranda: video tampil bila berasal dari channel yang tersedia
+  function ytId(s){
+    var m=String(s||"").trim().match(/(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:watch\?(?:[^#\s]*&)?v=|shorts\/|live\/|embed\/|v\/))([\w-]{11})/i);
+    return m?m[1]:"";
+  }
+  function drawLink(box,vid){
+    var qNow=homeQ;
+    function stale(){return homeQ!==qNow||!box.isConnected}
+    function note(t){box.innerHTML="";box.appendChild(el("div","ab",t))}
+    function show(v){box.innerHTML="";var g=el("div","grid");g.appendChild(card(v,1));box.appendChild(g)}
+    if(isBlocked(vid)){note("Video ini tidak tersedia.");return}
+    var all=homeAll.concat(homeArc),i;
+    for(i=0;i<all.length;i++)if(all[i].id===vid){show(all[i]);return}
+    note("Memeriksa link video…");
+    Promise.all(YT_CHANNELS.map(function(c){return chInfo(c).then(function(x){CI[c]=x;return{c:c,i:x}}).catch(function(){return null})})).then(function(chs){
+      return api("videos",{part:"snippet,contentDetails,liveStreamingDetails",id:vid}).then(function(d){
+        if(stale())return;
+        var v=d.items&&d.items[0];
+        if(!v){note("Video tidak ditemukan atau bersifat privat.");return}
+        var sn=v.snippet,own=null;
+        chs.forEach(function(x){if(x&&x.i&&x.i.id===sn.channelId)own=x.c});
+        if(!own){note("Video ini bukan dari channel yang tersedia di aplikasi.");return}
+        var t=sn.thumbnails||{},ld=v.liveStreamingDetails;
+        show({id:v.id,t:sn.title,c:sn.channelTitle,ch:own,p:sn.publishedAt,d:secs(v.contentDetails.duration),th:(t.maxres||t.high||t.medium||t.default||{}).url||"https://i.ytimg.com/vi/"+v.id+"/mqdefault.jpg",lb:sn.liveBroadcastContent||"none",rec:!!(ld&&ld.actualEndTime)});
+      });
+    }).catch(function(){if(!stale())note("Gagal memeriksa link. Periksa koneksi lalu coba lagi.")});
+  }
   function drawHome(box){
     box.innerHTML="";
+    var lnk=ytId(homeQ);if(lnk){drawLink(box,lnk);return}
     var q=nz(homeQ),items=homeAll;
     if(q){
       // Cari di judul, nama channel, tag, dan deskripsi; kata sebagian cocok pun ikut tampil (urut paling relevan)
