@@ -1382,11 +1382,13 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
     function draw(){lst.innerHTML="";var a=plAllMine();
       if(!a.length){var e=el("p","sn","Belum ada playlist. Buat dulu di atas.");e.style.whiteSpace="normal";lst.appendChild(e)}
       a.forEach(function(p){var b=el("button","mi");b.appendChild(el("b",null,plHas(p,v.id)?"☑":"☐"));b.appendChild(document.createTextNode(p.n+" · "+p.v.length));
-        b.onclick=function(){var on=plToggle(p.id,v);say(on?"Ditambahkan ✓":"Dihapus dari playlist");draw()};lst.appendChild(b)});
+        b.onclick=function(){if(plHas(p,v.id)&&!confirm2("Hapus video ini dari playlist \""+p.n+"\"?","Yakin hapus video ini dari playlist \""+p.n+"\"?"))return;var on=plToggle(p.id,v);say(on?"Ditambahkan ✓":"Dihapus dari playlist");draw()};lst.appendChild(b)});
     }
     nb.onclick=function(){var p=plNew(inp.value);if(!p){say("Isi nama playlist dulu");return}plToggle(p.id,v);inp.value="";say("Playlist dibuat ✓");draw()};
     draw();ov.appendChild(sh);ov.onclick=function(e){if(e.target===ov)ov.remove()};document.body.appendChild(ov);
   }
+  // Konfirmasi dua kali sebelum menghapus playlist atau isinya
+  function confirm2(m1,m2){return confirm(m1)&&confirm(m2)}
   function plyView(o){
     var a=plAllMine(),p=oPlyId?plFind(a,oPlyId):null;if(oPlyId&&!p)oPlyId=null;
     var so=el("div","so"),bk=el("button",null,p?"← Playlist Saya":"← Lainnya");
@@ -1414,7 +1416,7 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
       ok.onclick=function(){var n=i2.value.trim().slice(0,60);if(!n){say("Nama tidak boleh kosong");return}mut(function(q){q.n=n})};
       i2.onkeydown=function(e){if(e.key==="Enter")ok.onclick()};ti.appendChild(i2);ti.appendChild(ok);i2.focus();
     };
-    dl.onclick=function(){if(confirm("Hapus playlist \""+p.n+"\"?")){plSaveMine(plAllMine().filter(function(q){return q.id!==p.id}));oPlyId=null;renderOth()}};
+    dl.onclick=function(){if(confirm2("Hapus playlist \""+p.n+"\"?","Yakin? Playlist \""+p.n+"\" beserta "+p.v.length+" video di dalamnya akan dihapus dan tidak bisa dikembalikan.")){plSaveMine(plAllMine().filter(function(q){return q.id!==p.id}));oPlyId=null;renderOth()}};
     if(!p.v.length){o.appendChild(el("div","ab","Playlist kosong. Buka video, lalu tekan ➕ Playlist."));return}
     var host=el("div","pg");o.appendChild(host);
     p.v.forEach(function(v,i){
@@ -1425,7 +1427,7 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
       r.appendChild(th);r.appendChild(inf);r.onclick=function(){playFrom(i)};
       [["▲",-1],["▼",1],["✕",0]].forEach(function(x){var b=el("button",null,x[0]);
         if((x[1]===-1&&i===0)||(x[1]===1&&i===p.v.length-1))b.style.opacity=".3";
-        b.onclick=function(){mut(function(q){if(x[1]===0)q.v.splice(i,1);else{var j=i+x[1];if(j<0||j>=q.v.length)return;var t=q.v[i];q.v[i]=q.v[j];q.v[j]=t}})};cs.appendChild(b)});
+        b.onclick=function(){if(x[1]===0&&!confirm2("Hapus \""+(v.t||"video ini")+"\" dari playlist?","Yakin hapus video ini dari playlist \""+p.n+"\"?"))return;mut(function(q){if(x[1]===0)q.v.splice(i,1);else{var j=i+x[1];if(j<0||j>=q.v.length)return;var t=q.v[i];q.v[i]=q.v[j];q.v[j]=t}})};cs.appendChild(b)});
       w.appendChild(r);w.appendChild(cs);host.appendChild(w);
     });
   }
