@@ -397,7 +397,7 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
       var p={part:"contentDetails",maxResults:50,playlistId:pl};
       if(tok)p.pageToken=tok;
       return api("playlistItems",p).then(function(d){
-        (d.items||[]).forEach(function(it){ids.push(it.contentDetails.videoId)});
+        (d.items||[]).forEach(function(it){var c=it.contentDetails,t=Date.parse(c.videoPublishedAt);ids.push(c.videoId);if(t)PD[c.videoId]=t});
         if(d.nextPageToken&&ids.length<MAX_VIDEOS)return page(d.nextPageToken);
         return ids;
       });
@@ -414,13 +414,15 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
     })(ids.slice(i,i+50));
     return Promise.all(jobs).then(function(){return out});
   }
-  var CH_OF={},RK={};
+  var CH_OF={},RK={},PD={}; // PD: id video -> waktu rilis (ms)
+  function pdOf(a){var o={};(a||[]).forEach(function(i){if(PD[i])o[i]=PD[i]});return o}
+  function usePd(c){if(c&&c.pd)for(var k in c.pd)PD[k]=c.pd[k]}
   function fetchChannel(ch){return fetchChannel0(ch).then(function(l){(l||[]).forEach(function(x,i){CH_OF[x]=ch;RK[x]=i});return l})}
   function fetchChannel0(ch){
     var key=ch,ck=CACHE+":"+ch,c=load(ck,null);
-    if(c&&c.key===key&&Date.now()-c.t<TTL)return Promise.resolve(c.items);
-    if(c&&c.key===key&&c.items&&c.items.length&&Date.now()-c.t<21600000){ // cache <6 jam: tampil langsung, segarkan diam-diam
-      if(!c._rf){c._rf=1;setTimeout(function(){save(ck,{key:key,t:0,items:c.items});fetchChannel(ch)},4000)}
+    if(c&&c.pd&&c.key===key&&Date.now()-c.t<TTL){usePd(c);return Promise.resolve(c.items)}
+    if(c&&c.pd&&c.key===key&&c.items&&c.items.length&&Date.now()-c.t<21600000){usePd(c); // cache <6 jam: tampil langsung, segarkan diam-diam
+      if(!c._rf){c._rf=1;setTimeout(function(){save(ck,{key:key,t:0,items:c.items,pd:c.pd});fetchChannel(ch)},4000)}
       return Promise.resolve(c.items);
     }
     return channelId(ch).then(function(id){
@@ -430,11 +432,11 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
         return playlistIds("UU"+id.slice(2)).then(onlyShort);
       });
     }).then(function(items){
-      save(ck,{key:key,t:Date.now(),items:items});
+      save(ck,{key:key,t:Date.now(),items:items,pd:pdOf(items)});
       return items;
     }).catch(function(e){
       console.error(ch,e);
-      if(c&&c.key===key&&c.items.length)return c.items;
+      if(c&&c.key===key&&c.items.length){usePd(c);return c.items}
       return [];
     });
   }
@@ -460,7 +462,7 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
     });
   }
 
-  // Urutan feed Short: yang terbaru dulu (per channel: 5 terbaru, lalu sampai 10, 20, 50, 100, sisanya), diacak di dalam tiap tingkat.
+  // Urutan feed Short: tingkat menurut tanggal & jam rilis (terbaru dulu), diacak di dalam tiap tingkat.
   // Video yang sudah pernah tampil (disimpan di perangkat) atau sudah ada di feed tidak dimasukkan lagi.
   var SEENK="dakwah_seen_v1",SEEN={},QD={},endShown=false;
   try{JSON.parse(localStorage.getItem(SEENK)||"[]").forEach(function(i){SEEN[i]=1})}catch(e){}
@@ -470,11 +472,13 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
     save(SEENK,k);
   }
   function shuffled(){
-    var CUT=[5,10,20,50,100],tiers=[[],[],[],[],[],[]],a=[],i,j,t,k;
+    // Terbaru dulu menurut tanggal & jam rilis (24 jam, 3 hari, 7 hari, 30 hari, 90 hari, lalu video lama),
+    // dan di dalam tiap tingkat urutannya diacak. Video lama tetap tampil di akhir.
+    var HRS=[24,72,168,720,2160],tiers=[[],[],[],[],[],[]],a=[],i,j,t,k,h,r,now=Date.now();
     pool.forEach(function(id){
       if(SEEN[id]||QD[id])return;
-      var r=RK[id]||0;
-      for(k=0;k<CUT.length&&r>=CUT[k];k++);
+      if(PD[id]){h=(now-PD[id])/36e5;for(k=0;k<HRS.length&&h>HRS[k];k++);}
+      else{r=RK[id];k=r===undefined?0:r<5?0:r<20?2:r<50?4:5} // tanpa tanggal: pakai urutan di channel
       tiers[k].push(id);
     });
     tiers.forEach(function(g){
