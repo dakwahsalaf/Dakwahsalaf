@@ -79,6 +79,7 @@ html,body{height:100%;background:var(--bg);color:var(--fg);font-family:system-ui
 .top{position:fixed;top:0;left:0;right:0;z-index:5;padding:calc(10px + env(safe-area-inset-top,0px)) 14px 10px;background:linear-gradient(rgba(0,0,0,.6),transparent);pointer-events:none;display:flex;justify-content:space-between;align-items:center}
 .top h1{font-size:18px;font-weight:700}
 #install{display:none;pointer-events:auto;border:0;border-radius:14px;padding:6px 12px;font-size:13px;font-weight:700;background:var(--acc);color:#04210f;cursor:pointer}
+.endc{height:100%;scroll-snap-align:start;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;padding:32px;color:var(--mut);background:#000}.endc h2{color:var(--fg);font-size:20px}
 .empty{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:32px;gap:12px;color:var(--mut);line-height:1.5}
 .empty h2{color:var(--fg);font-size:20px}
 .msg{position:absolute;inset:0;margin:auto;height:fit-content;width:fit-content;max-width:80%;text-align:center;background:rgba(0,0,0,.7);padding:12px 16px;border-radius:12px;font-size:14px;display:none;z-index:2}
@@ -413,8 +414,8 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
     })(ids.slice(i,i+50));
     return Promise.all(jobs).then(function(){return out});
   }
-  var CH_OF={};
-  function fetchChannel(ch){return fetchChannel0(ch).then(function(l){(l||[]).forEach(function(x){CH_OF[x]=ch});return l})}
+  var CH_OF={},RK={};
+  function fetchChannel(ch){return fetchChannel0(ch).then(function(l){(l||[]).forEach(function(x,i){CH_OF[x]=ch;RK[x]=i});return l})}
   function fetchChannel0(ch){
     var key=ch,ck=CACHE+":"+ch,c=load(ck,null);
     if(c&&c.key===key&&Date.now()-c.t<TTL)return Promise.resolve(c.items);
@@ -459,18 +460,31 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
     });
   }
 
-  // Acak Fisher-Yates; video pertama batch baru tidak sama dengan video terakhir sebelumnya
+  // Urutan feed Short: yang terbaru dulu (per channel: 20 terbaru, lalu sampai 50, 100, sisanya), diacak di dalam tiap tingkat.
+  // Video yang sudah pernah tampil (disimpan di perangkat) atau sudah ada di feed tidak dimasukkan lagi.
+  var SEENK="dakwah_seen_v1",SEEN={},QD={},endShown=false;
+  try{JSON.parse(localStorage.getItem(SEENK)||"[]").forEach(function(i){SEEN[i]=1})}catch(e){}
+  function markSeen(id){
+    if(!id||SEEN[id])return;SEEN[id]=1;
+    var k=Object.keys(SEEN);if(k.length>6000){k.slice(0,k.length-6000).forEach(function(x){delete SEEN[x]});k=Object.keys(SEEN)}
+    save(SEENK,k);
+  }
   function shuffled(){
-    var a=pool.slice(),i,j,t;
-    for(i=a.length-1;i>0;i--){j=Math.floor(Math.random()*(i+1));t=a[i];a[i]=a[j];a[j]=t}
+    var tiers=[[],[],[],[]],a=[],i,j,t;
+    pool.forEach(function(id){
+      if(SEEN[id]||QD[id])return;
+      var r=RK[id]||0;tiers[r<20?0:r<50?1:r<100?2:3].push(id);
+    });
+    tiers.forEach(function(g){
+      for(i=g.length-1;i>0;i--){j=Math.floor(Math.random()*(i+1));t=g[i];g[i]=g[j];g[j]=t}
+      a=a.concat(g);
+    });
     if(want){
       i=a.indexOf(want);
       if(i>-1)a.splice(i,1);
       if(/^[\w-]{11}$/.test(want))a.unshift(want);
       want=null;
     }
-    if(a.length>1&&a[0]===lastId){t=a[0];a[0]=a[a.length-1];a[a.length-1]=t}
-    lastId=a[a.length-1];
     return a;
   }
 
@@ -641,7 +655,7 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
   function activate(r){
     if(cur&&cur.r===r)return;
     var old=cur&&cur.r;
-    cur={r:r};
+    cur={r:r};markSeen(r.dataset.id);
     if(old)pauseReel(old);
     playReel(r);
     var rid=r.dataset.id;setTimeout(function(){if(cur&&cur.r===r&&tab==="short")addHist({id:rid,s:1})},3000); // tercatat jika ditonton 3 detik
@@ -703,7 +717,7 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
   }
   function addReel(id){
     var r=el("section","reel");
-    r.dataset.i=total++;r.dataset.id=id;
+    r.dataset.i=total++;r.dataset.id=id;QD[id]=1;
     var poster=el("div","poster");poster.dataset.s="https://i.ytimg.com/vi/"+id+"/hqdefault.jpg";
     var host=el("div","yt"),tap=el("div","tap");
     var msg=el("div","msg","Video tidak dapat diputar.");
@@ -826,7 +840,18 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
     shareEl.classList.remove("open");
   });
 
-  function addBatch(){shuffled().forEach(addReel)}
+  function addBatch(){
+    var a=shuffled().slice(0,20);
+    if(!a.length){ // stok habis → ulang dari awal secara otomatis (feed tanpa akhir)
+      SEEN={};save(SEENK,[]);QD={};
+      var n=feed.children.length,k,d;
+      for(k=Math.max(0,n-3);k<n;k++){d=feed.children[k].dataset;if(d&&d.id)QD[d.id]=1} // jangan langsung mengulang video yang baru tampil
+      a=shuffled().slice(0,20);
+      if(!a.length){QD={};a=shuffled().slice(0,20)} // pool sangat kecil
+      if(!a.length)return;
+    }
+    a.forEach(addReel);
+  }
 
   /* ---------- Tab Beranda (video panjang) + Tab ---------- */
   var home=document.getElementById("home"),watch=document.getElementById("watch"),tabsEl=document.getElementById("tabs"),HMAX=50,HV="dakwah_ch_v2:",CI={},lastHome=0,chs=document.getElementById("chs"),hist=document.getElementById("hist"),HK="dakwah_hist_v1",chp=document.getElementById("chp"),cTab="v",cSort="n",curCh="";
@@ -2158,7 +2183,7 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
     if(!pool.length){showMsg("Video belum tersedia");return}
     feed.innerHTML="";
     // batch pertama kecil (20 video) supaya cepat dirender; batch berikutnya memuat pool lengkap dari semua channel
-    shuffled().slice(0,20).forEach(addReel);
+    addBatch();
     // siapkan dua short pertama di latar belakang agar tab Short langsung siap saat dibuka
     if(tab!=="short"){[0,1].forEach(function(k){var r=feed.children[k];if(r&&r.classList.contains("reel"))setTimeout(function(){if(!r._f&&!cur)build(r,false)},k*250)})}
   }).catch(function(e){console.error(e);showMsg("Video belum tersedia","Periksa link channel dan API key, lalu coba lagi.")});
