@@ -460,7 +460,7 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
     });
   }
 
-  // Urutan feed Short: yang terbaru dulu (per channel: 20 terbaru, lalu sampai 50, 100, sisanya), diacak di dalam tiap tingkat.
+  // Urutan feed Short: yang terbaru dulu (per channel: 5 terbaru, lalu sampai 10, 20, 50, 100, sisanya), diacak di dalam tiap tingkat.
   // Video yang sudah pernah tampil (disimpan di perangkat) atau sudah ada di feed tidak dimasukkan lagi.
   var SEENK="dakwah_seen_v1",SEEN={},QD={},endShown=false;
   try{JSON.parse(localStorage.getItem(SEENK)||"[]").forEach(function(i){SEEN[i]=1})}catch(e){}
@@ -470,10 +470,12 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
     save(SEENK,k);
   }
   function shuffled(){
-    var tiers=[[],[],[],[]],a=[],i,j,t;
+    var CUT=[5,10,20,50,100],tiers=[[],[],[],[],[],[]],a=[],i,j,t,k;
     pool.forEach(function(id){
       if(SEEN[id]||QD[id])return;
-      var r=RK[id]||0;tiers[r<20?0:r<50?1:r<100?2:3].push(id);
+      var r=RK[id]||0;
+      for(k=0;k<CUT.length&&r>=CUT[k];k++);
+      tiers[k].push(id);
     });
     tiers.forEach(function(g){
       for(i=g.length-1;i>0;i--){j=Math.floor(Math.random()*(i+1));t=g[i];g[i]=g[j];g[j]=t}
