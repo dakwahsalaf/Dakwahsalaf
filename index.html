@@ -695,6 +695,12 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
     cur.r._paint();
   },250);
 
+  // Link YouTube yang melanjutkan dari detik terakhir (Short memakai watch?v= agar &t= berlaku)
+  function ytUrl(id,sec,short){
+    sec=Math.floor(sec||0);
+    if(sec>3)return "https://www.youtube.com/watch?v="+id+"&t="+sec+"s";
+    return short?"https://www.youtube.com/shorts/"+id:"https://www.youtube.com/watch?v="+id;
+  }
   function addReel(id){
     var r=el("section","reel");
     r.dataset.i=total++;r.dataset.id=id;
@@ -762,7 +768,7 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
     sh.onclick=function(){openShare(id)};
     var yt=el("button","btn");yt.setAttribute("aria-label","Buka di YouTube");
     yt.innerHTML='<svg width="22" height="22" viewBox="0 0 24 24" fill="#fff"><path d="M21.6 7.2a2.5 2.5 0 0 0-1.8-1.8C18.2 5 12 5 12 5s-6.2 0-7.8.4A2.5 2.5 0 0 0 2.4 7.2C2 8.8 2 12 2 12s0 3.2.4 4.8a2.5 2.5 0 0 0 1.8 1.8C5.8 19 12 19 12 19s6.2 0 7.8-.4a2.5 2.5 0 0 0 1.8-1.8c.4-1.6.4-4.8.4-4.8s0-3.2-.4-4.8zM10 15V9l5.2 3z"/></svg>';
-    yt.onclick=function(){window.open("https://www.youtube.com/shorts/"+id,"_blank","noopener")};
+    yt.onclick=function(e){e.stopPropagation();var c=(r._t||0)+(r._st===1&&r._tt?(Date.now()-r._tt)/1000:0);window.open(ytUrl(id,c,true),"_blank","noopener")};
     var thb=el("button","btn");thb.setAttribute("aria-label","Unduh thumbnail");thb.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M21 16l-5-5-8 9"/></svg>';thb.onclick=function(e){e.stopPropagation();dlThumb({id:id,s:1},thb)};
     side.appendChild(sh);side.appendChild(thb);side.appendChild(yt);
     var cch=CH_OF[id];
@@ -1055,7 +1061,7 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
     sh.appendChild(el("p","sn",t));
     item("↗️","Bagikan",function(){close();var m=shareMsg(t,appLink(v.id,0,v.s));if(navigator.share)navigator.share({title:t,text:m}).catch(function(err){if(!err||err.name!=="AbortError")copyText(m)});else copyText(m)});
     item("🔗","Salin link",function(){close();copyText(shareMsg(t,appLink(v.id,0,v.s)))});
-    item("▶️","Buka di YouTube",function(){close();window.open("https://www.youtube.com/watch?v="+v.id,"_blank","noopener")});
+    item("▶️","Buka di YouTube",function(){close();var sec=(wCur&&wCur.id===v.id&&wTime>0)?wTime:(v.s?0:(posOf(v.id)||{t:0}).t);window.open(ytUrl(v.id,sec,v.s),"_blank","noopener")});
     item("🚩","Laporkan",function(){close();openReport(v,cardEl)});
     ov.appendChild(sh);ov.onclick=function(e){if(e.target===ov)close()};document.body.appendChild(ov);
   }
@@ -1813,7 +1819,7 @@ function isBlocked(id){return !!BLOCKED_IDS[id]||!!LAPOR_IDS[id]}
     }else pl.appendChild(f);
     watch.querySelector(".wt").textContent=v.t;wc.textContent=v.c;
     wc.className="wc"+(v.ch?" lk":"");wc.onclick=v.ch?function(){closeWatch();openChannel(v.ch)}:null;
-    watch.querySelector(".wy").onclick=function(){window.open(short?"https://www.youtube.com/shorts/"+v.id:"https://www.youtube.com/watch?v="+v.id,"_blank","noopener")};
+    watch.querySelector(".wy").onclick=function(){var sec=(wCur&&wCur.id===v.id&&wTime>0)?wTime:0;window.open(ytUrl(v.id,sec,short),"_blank","noopener")};
     watch.classList.add("open");wHistOn();
     if(feedOn&&!keep){var sf0=pl.querySelector(".sf");sf0.scrollTop=wCtx.i*sf0.clientHeight}
     bgSet(v,f,short);
